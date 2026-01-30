@@ -61,6 +61,11 @@
 | updated_at | timestamp | 最近更新时间 |
 | created_at | timestamp | 创建时间 |
 
+#### 索引与性能
+- 唯一索引: (fid, part)
+- 筛选索引: status, updated_at
+- 关键词检索: source_text/translated_text 使用 GIN + pg_trgm
+
 ### text_claims
 | 字段 | 类型 | 说明 |
 |------|------|------|
