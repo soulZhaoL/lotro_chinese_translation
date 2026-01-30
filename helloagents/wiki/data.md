@@ -82,6 +82,7 @@
 | user_id | bigint | 锁定人 |
 | locked_at | timestamp | 锁定时间 |
 | expires_at | timestamp | 过期时间 |
+| released_at | timestamp | 释放时间 |
 
 ### text_changes
 | 字段 | 类型 | 说明 |

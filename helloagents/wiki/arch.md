@@ -8,8 +8,8 @@ flowchart TD
 ```
 
 ## 技术栈
-- **后端:** Python（框架待定）
-- **前端:** React + Ant Design
+- **后端:** Python + FastAPI
+- **前端:** React + Ant Design + Vite
 - **数据:** PostgreSQL
 
 ## 核心流程
@@ -38,3 +38,5 @@ sequenceDiagram
 | adr_id | title | date | status | affected_modules | details |
 |--------|-------|------|--------|------------------|---------|
 | ADR-001 | 初始架构与数据模型方案 | 2026-01-30 | ✅已采纳 | 用户与权限、文本任务与翻译、词典管理、文本校验 | 待方案包生成 |
+| ADR-002 | 后端框架选择（FastAPI） | 2026-01-30 | ✅已采纳 | 后端基础 | history/2026-01/202601302117_backend_mvp/how.md#adr-002 |
+| ADR-003 | 前端 Mock 方案（vite-plugin-mock） | 2026-01-30 | ✅已采纳 | 前端 UI | history/2026-01/202601302309_docs_mock_layout/how.md#adr-003 |

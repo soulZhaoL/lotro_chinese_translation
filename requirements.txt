@@ -1,0 +1,10 @@
+# pip install  -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+
+
+fastapi
+uvicorn
+psycopg[binary]
+PyYAML
+pytest
+python-dotenv
+httpx
