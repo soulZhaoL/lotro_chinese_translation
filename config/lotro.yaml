@@ -18,7 +18,7 @@ cors:
   allow_origins:
     - "http://localhost:5173"
     - "https://lotro-chinese-translation.vercel.app"
-    - "https://lotrozh.online"
+    - "https://www.lotrozh.online"
   allow_methods:
     - "GET"
     - "POST"
