@@ -42,6 +42,26 @@ require_env LOTRO_LOG_PATH
 PID_PATH="${LOTRO_PID_PATH}"
 LOG_PATH="${LOTRO_LOG_PATH}"
 
+ensure_parent_dir() {
+  local file_path="$1"
+  if [[ -d "${file_path}" ]]; then
+    echo "[ERROR] 路径应为文件，但给的是目录: ${file_path}" >&2
+    exit 1
+  fi
+  local parent_dir
+  parent_dir="$(dirname "${file_path}")"
+  if [[ -e "${parent_dir}" && ! -d "${parent_dir}" ]]; then
+    echo "[ERROR] 父路径不是目录: ${parent_dir}" >&2
+    exit 1
+  fi
+  if [[ ! -d "${parent_dir}" ]]; then
+    mkdir -p "${parent_dir}"
+  fi
+}
+
+ensure_parent_dir "${PID_PATH}"
+ensure_parent_dir "${LOG_PATH}"
+
 is_running() {
   if [[ -f "${PID_PATH}" ]]; then
     local pid

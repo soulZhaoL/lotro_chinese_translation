@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .config import get_config
 from .response import error_response
-from .routes import auth, changes, claims, dictionary, locks, texts, validate
+from .routes import auth, changes, claims, dictionary, health, locks, texts, validate
 
 
 def create_app() -> FastAPI:
@@ -47,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(locks.router)
     app.include_router(changes.router)
     app.include_router(dictionary.router)
+    app.include_router(health.router)
     app.include_router(validate.router)
 
     return app
