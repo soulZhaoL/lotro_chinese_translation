@@ -79,6 +79,26 @@ ssh -N -L 5433:127.0.0.1:5432 ubuntu@43.133.38.166 -p 22
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 
+### 后台守护（支持启动/停止/状态/重启）
+
+使用 `server/service.sh` 管理服务（必须显式传入环境文件）：
+
+```
+./server/service.sh start --env /abs/path/.env
+./server/service.sh status --env /abs/path/.env
+./server/service.sh stop --env /abs/path/.env
+./server/service.sh restart --env /abs/path/.env
+```
+
+环境文件需包含以下变量：
+
+```
+LOTRO_BACKEND_HOST=0.0.0.0
+LOTRO_BACKEND_PORT=8000
+LOTRO_PID_PATH=/abs/path/to/uvicorn.pid
+LOTRO_LOG_PATH=/abs/path/to/uvicorn.log
+```
+
 ## API 文档
 
 FastAPI 自带文档：
