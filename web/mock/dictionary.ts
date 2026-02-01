@@ -1,39 +1,48 @@
 // Mock: 词典相关接口。
 import type { MockMethod } from "vite-plugin-mock";
 
-import { mockDictionary } from "./data";
+import { generateDictionary } from "./rules";
 
 export default [
   {
-    url: "/dictionary",
+    url: "/api/dictionary",
     method: "get",
     response: ({ query }) => {
-      const keyword = query?.keyword as string | undefined;
-      const items = keyword
-        ? mockDictionary.filter((item) =>
-            item.term_key.includes(keyword) || item.term_value.includes(keyword)
-          )
-        : mockDictionary;
+      const items = generateDictionary(query || {});
       return {
-        items,
-        total: items.length,
-        page: 1,
-        page_size: items.length,
+        success: true,
+        statusCode: 200,
+        code: "0000",
+        message: "操作成功",
+        data: {
+          items,
+          total: items.length,
+          page: Number(query?.page || 1),
+          page_size: Number(query?.page_size || items.length),
+        },
       };
     },
   },
   {
-    url: "/dictionary",
+    url: "/api/dictionary",
     method: "post",
     response: () => ({
-      id: 999,
+      success: true,
+      statusCode: 200,
+      code: "0000",
+      message: "操作成功",
+      data: { id: Math.floor(Math.random() * 10000) + 1 },
     }),
   },
   {
-    url: /\/dictionary\/\d+/,
+    url: /\/api\/dictionary\/\d+/,
     method: "put",
     response: ({ url }) => ({
-      id: Number(url.split("/").pop()),
+      success: true,
+      statusCode: 200,
+      code: "0000",
+      message: "操作成功",
+      data: { id: Number(url.split("/").pop()) },
     }),
   },
 ] as MockMethod[];

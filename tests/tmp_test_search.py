@@ -32,7 +32,7 @@ def test_keyword_search(seed_user):
     token = _login(client, seed_user)
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.get("/texts?keyword=hello", headers=headers)
+    response = client.get("/texts?source_keyword=hello", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1

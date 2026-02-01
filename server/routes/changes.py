@@ -4,6 +4,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..db import db_cursor
+from ..response import success_response
 from .deps import require_auth
 
 router = APIRouter(prefix="/changes", tags=["changes"])
@@ -28,4 +29,4 @@ def list_changes(text_id: int = Query(...), _: Dict[str, Any] = Depends(require_
         )
         items = cursor.fetchall()
 
-    return {"items": items}
+    return success_response({"items": items})

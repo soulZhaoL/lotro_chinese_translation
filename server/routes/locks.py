@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from ..config import get_config
 from ..db import db_cursor
+from ..response import success_response
 from .deps import require_auth
 
 router = APIRouter(prefix="/locks", tags=["locks"])
@@ -61,7 +62,7 @@ def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_aut
         )
         lock_id = cursor.fetchone()["id"]
 
-    return {"lock_id": lock_id, "expires_at": expires_at}
+    return success_response({"lock_id": lock_id, "expires_at": expires_at})
 
 
 @router.delete("/{lock_id}")
@@ -90,4 +91,4 @@ def release_lock(lock_id: int, user: Dict[str, Any] = Depends(require_auth)):
             (now, lock_id),
         )
 
-    return {"released_at": now}
+    return success_response({"released_at": now})

@@ -3,18 +3,30 @@ import type { MockMethod } from "vite-plugin-mock";
 
 export default [
   {
-    url: "/locks",
+    url: "/api/locks",
     method: "post",
     response: () => ({
-      lock_id: 1,
-      expires_at: "2026-01-30T12:00:00Z",
+      success: true,
+      statusCode: 200,
+      code: "0000",
+      message: "操作成功",
+      data: {
+        lock_id: 1,
+        expires_at: "2026-01-30T12:00:00Z",
+      },
     }),
   },
   {
-    url: /\/locks\/\d+/,
+    url: /\/api\/locks\/\d+/,
     method: "delete",
     response: () => ({
-      released_at: "2026-01-30T11:30:00Z",
+      success: true,
+      statusCode: 200,
+      code: "0000",
+      message: "操作成功",
+      data: {
+        released_at: "2026-01-30T11:30:00Z",
+      },
     }),
   },
 ] as MockMethod[];

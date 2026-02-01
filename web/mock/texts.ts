@@ -1,38 +1,61 @@
 // Mock: 主文本相关接口。
 import type { MockMethod } from "vite-plugin-mock";
 
-import { mockTexts } from "./data";
+import { generateTextDetail, generateTexts } from "./rules";
 
 export default [
   {
-    url: "/texts",
+    url: "/api/texts",
     method: "get",
     response: ({ query }) => {
-      const keyword = query?.keyword as string | undefined;
-      const items = keyword
-        ? mockTexts.filter((item) =>
-            item.source_text.includes(keyword) ||
-            (item.translated_text || "").includes(keyword)
-          )
-        : mockTexts;
+      const items = generateTexts(query || {});
       return {
-        items,
-        total: items.length,
-        page: 1,
-        page_size: items.length,
+        success: true,
+        statusCode: 200,
+        code: "0000",
+        message: "操作成功",
+        data: {
+          items,
+          total: items.length,
+          page: Number(query?.page || 1),
+          page_size: Number(query?.page_size || items.length),
+        },
       };
     },
   },
   {
-    url: /\/texts\/\d+/,
+    url: /\/api\/texts\/\d+$/,
     method: "get",
     response: ({ url }) => {
       const id = Number(url.split("/").pop());
-      const text = mockTexts.find((item) => item.id === id) || mockTexts[0];
+      const text = generateTextDetail(id);
       return {
-        text,
-        claims: [],
-        locks: [],
+        success: true,
+        statusCode: 200,
+        code: "0000",
+        message: "操作成功",
+        data: {
+          text,
+          claims: text.claim_id
+            ? [{ id: text.claim_id, user_id: 1, claimed_at: text.claimed_at }]
+            : [],
+          locks: [],
+        },
+      };
+    },
+  },
+  {
+    url: /\/api\/texts\/\d+\/translate/,
+    method: "put",
+    response: ({ url, body }) => {
+      const id = Number(url.split("/").slice(-2)[0]);
+      const isCompleted = Boolean(body?.is_completed);
+      return {
+        success: true,
+        statusCode: 200,
+        code: "0000",
+        message: "操作成功",
+        data: { id, status: isCompleted ? 3 : 2 },
       };
     },
   },

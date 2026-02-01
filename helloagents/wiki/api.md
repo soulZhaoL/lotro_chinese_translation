@@ -1,7 +1,21 @@
 # API 手册
 
 ## 概述
-本文件描述计划中的核心接口，最终以实现为准。当前仅完成数据库迁移脚本，接口仍处于规划阶段。
+本文件描述计划中的核心接口，最终以实现为准。
+
+### 统一响应结构
+所有接口均返回以下结构：
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "code": "0000",
+  "message": "操作成功",
+  "data": {}
+}
+```
+
+当 `code != "0000"` 时表示异常，前端应直接展示 `message`。
 
 ## 认证方式
 - 登录获取签名 token（HMAC），后续请求通过 `Authorization: Bearer <token>` 传递
@@ -42,12 +56,23 @@
 #### [GET] /texts
 **描述:** 获取主文本列表（支持筛选与分页）
 
-**请求参数:** fid/part/status/keyword/page/page_size
+**请求参数:** fid/part/status(1=新增/2=修改/3=已完成)/source_keyword/translated_keyword/updated_from/updated_to/claimer/claimed/page/page_size
 
 **响应:**
 ```json
 {
-  "items": [{ "id": 1, "fid": "file_a", "part": "p1", "status": "待认领" }],
+  "items": [
+    {
+      "id": 1,
+      "fid": "file_a",
+      "part": "p1",
+      "status": 1,
+      "claim_id": 10,
+      "claimed_by": "tester",
+      "claimed_at": "2026-01-30T10:00:00Z",
+      "is_claimed": true
+    }
+  ],
   "total": 1,
   "page": 1,
   "page_size": 20
@@ -72,6 +97,14 @@
 **响应:**
 ```json
 { "claim_id": 1 }
+```
+
+#### [DELETE] /claims/{id}
+**描述:** 释放认领
+
+**响应:**
+```json
+{ "id": 1 }
 ```
 
 #### [POST] /locks
@@ -109,6 +142,17 @@
 #### [GET] /dictionary
 **描述:** 获取词典列表
 
+**请求参数:**
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| keyword | string | 否 | 兼容关键字（原文/译文模糊匹配） |
+| term_key | string | 否 | 原文模糊匹配 |
+| term_value | string | 否 | 译文模糊匹配 |
+| category | string | 否 | 分类 |
+| is_active | boolean | 否 | 是否启用 |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
 **响应:**
 ```json
 {
@@ -145,4 +189,17 @@
 **响应:**
 ```json
 { "valid": true, "errors": [] }
+```
+
+#### [PUT] /texts/{id}/translate
+**描述:** 保存译文并写入变更记录
+
+**请求:**
+```json
+{ "translated_text": "...", "reason": "修正说明", "is_completed": true }
+```
+
+**响应:**
+```json
+{ "id": 1 }
 ```

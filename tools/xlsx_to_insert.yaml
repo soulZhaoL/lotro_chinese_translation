@@ -1,0 +1,45 @@
+# xlsx 转 INSERT 配置（请填写）
+
+base_dir: "__PROJECT_ROOT__"
+
+input:
+  path: "work_text/text_work.xlsx"
+  sheet: "sheet1"
+  # Excel 行号（包含该行），通常第 1 行是表头，数据从第 2 行开始
+  row_start: 2
+  # 结束行号；可填写整数或 "max"
+  row_end: "max"
+  # Excel 列号（从 1 开始）
+  source_columns:
+    fid: 1
+    part: 2
+    source_text: 3
+    translated_text: 4
+
+output:
+  path: "work_text/text_main_insert.sql"
+  table: "text_main"
+  columns:
+    - fid
+    - part
+    - source_text
+    - translated_text
+    - status
+    - is_claimed
+    - edit_count
+  # 每 20000 行生成一条 INSERT 语句
+  chunk_size: 20000
+  fixed_values:
+    status: 1
+    is_claimed: false
+    edit_count: 0
+
+behavior:
+  # 缺失必填字段时：error=报错中止，skip=跳过该行
+  on_missing: "error"
+  # 空行直接跳过（不参与缺失校验）
+  skip_blank_rows: true
+  # 允许为 NULL 的输出列
+  nullable_columns:
+    - source_text
+    - translated_text

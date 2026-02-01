@@ -8,7 +8,7 @@ import yaml
 from dotenv import load_dotenv
 
 
-_REQUIRED_TOP_LEVEL_KEYS = ("database", "auth", "pagination", "locks")
+_REQUIRED_TOP_LEVEL_KEYS = ("database", "auth", "pagination", "locks", "cors", "http", "text_list")
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
 
@@ -87,6 +87,9 @@ def load_config() -> Dict[str, Any]:
     auth = _require_type(_require_key(data, "auth", ""), dict, "auth")
     pagination = _require_type(_require_key(data, "pagination", ""), dict, "pagination")
     locks = _require_type(_require_key(data, "locks", ""), dict, "locks")
+    cors = _require_type(_require_key(data, "cors", ""), dict, "cors")
+    http = _require_type(_require_key(data, "http", ""), dict, "http")
+    text_list = _require_type(_require_key(data, "text_list", ""), dict, "text_list")
 
     _require_type(_require_key(database, "dsn", "database."), str, "database.dsn")
 
@@ -99,6 +102,14 @@ def load_config() -> Dict[str, Any]:
     _require_type(_require_key(pagination, "max_page_size", "pagination."), int, "pagination.max_page_size")
 
     _require_type(_require_key(locks, "default_ttl_seconds", "locks."), int, "locks.default_ttl_seconds")
+    _require_type(_require_key(cors, "allow_origins", "cors."), list, "cors.allow_origins")
+    _require_type(_require_key(cors, "allow_methods", "cors."), list, "cors.allow_methods")
+    _require_type(_require_key(cors, "allow_headers", "cors."), list, "cors.allow_headers")
+    _require_type(_require_key(cors, "expose_headers", "cors."), list, "cors.expose_headers")
+    _require_type(_require_key(cors, "allow_credentials", "cors."), bool, "cors.allow_credentials")
+    _require_type(_require_key(cors, "max_age", "cors."), int, "cors.max_age")
+    _require_type(_require_key(http, "gzip_minimum_size", "http."), int, "http.gzip_minimum_size")
+    _require_type(_require_key(text_list, "max_text_length", "text_list."), int, "text_list.max_text_length")
 
     return data
 

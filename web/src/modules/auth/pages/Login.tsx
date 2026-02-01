@@ -1,7 +1,8 @@
 // 登录页面。
-import { Button, Card, Form, Input, Typography } from "antd";
+import { Button, Card, Form, Input, Typography, message } from "antd";
+import { useState } from "react";
 
-import { apiFetch, setToken } from "../api";
+import { apiFetch, getErrorMessage, setToken, setUserName } from "../../../api";
 
 const { Title } = Typography;
 
@@ -22,15 +23,28 @@ interface LoginProps {
 
 export default function Login({ onLogin }: LoginProps) {
   const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
-    const result = await apiFetch<LoginResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(values),
-    });
-    setToken(result.token);
-    onLogin();
+    try {
+      if (submitting) {
+        return;
+      }
+      setSubmitting(true);
+      const values = await form.validateFields();
+      const result = await apiFetch<LoginResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      setToken(result.token);
+      setUserName(result.user.username);
+      message.success("登录成功");
+      onLogin();
+    } catch (error) {
+      message.error(getErrorMessage(error, "登录失败"));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -44,7 +58,7 @@ export default function Login({ onLogin }: LoginProps) {
           <Form.Item name="password" label="密码" rules={[{ required: true }]}>
             <Input.Password />
           </Form.Item>
-          <Button type="primary" htmlType="submit" block>
+          <Button type="primary" htmlType="submit" block loading={submitting}>
             登录
           </Button>
         </Form>

@@ -54,10 +54,11 @@
 | id | bigint | 主键 |
 | fid | varchar | 文件标识 |
 | part | varchar | 分段标识 |
-| source_text | text | 原文 |
+| source_text | text | 原文（允许为空） |
 | translated_text | text | 译文 |
-| status | varchar | 状态（待认领/已认领） |
-| edit_count | int | 变更次数 |
+| status | smallint | 状态（1=新增/2=修改/3=已完成） |
+| is_claimed | boolean | 是否已认领（未认领/已认领） |
+| edit_count | int | 变更次数（默认0） |
 | updated_at | timestamp | 最近更新时间 |
 | created_at | timestamp | 创建时间 |
 

@@ -1,16 +1,39 @@
 // 前端入口渲染。
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, message } from "antd";
 import zhCN from "antd/locale/zh_CN";
 
 import App from "./App";
+import { loadAppConfig } from "./config";
 import "antd/dist/reset.css";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <ConfigProvider locale={zhCN}>
-      <App />
-    </ConfigProvider>
-  </React.StrictMode>
-);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+
+const renderApp = () => {
+  root.render(
+    <React.StrictMode>
+      <ConfigProvider locale={zhCN}>
+        <App />
+      </ConfigProvider>
+    </React.StrictMode>
+  );
+};
+
+void (async () => {
+  try {
+    await loadAppConfig();
+    renderApp();
+  } catch (error) {
+    root.render(
+      <React.StrictMode>
+        <ConfigProvider locale={zhCN}>
+          <div style={{ padding: 24 }}>
+            前端配置加载失败，请检查 /app-config.json
+          </div>
+        </ConfigProvider>
+      </React.StrictMode>
+    );
+    message.error((error as Error).message || "前端配置加载失败");
+  }
+})();

@@ -13,3 +13,26 @@ pagination:
 
 locks:
   default_ttl_seconds: 1800
+
+cors:
+  allow_origins:
+    - "http://localhost:5173"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+  allow_headers:
+    - "Authorization"
+    - "Content-Type"
+  expose_headers: []
+  allow_credentials: false
+  max_age: 600
+
+http:
+  gzip_minimum_size: 1024
+
+text_list:
+  max_text_length: 5000

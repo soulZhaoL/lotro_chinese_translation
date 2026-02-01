@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..db import db_cursor
+from ..response import success_response
 from .deps import require_auth
 
 router = APIRouter(prefix="/claims", tags=["claims"])
@@ -45,4 +46,23 @@ def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_a
         else:
             claim_id = row["id"]
 
-    return {"claim_id": claim_id}
+    return success_response({"claim_id": claim_id})
+
+
+@router.delete("/{claim_id}")
+def release_claim(claim_id: int, user: Dict[str, Any] = Depends(require_auth)):
+    """释放认领，仅允许本人释放。"""
+    with db_cursor() as cursor:
+        cursor.execute(
+            "SELECT id, user_id FROM text_claims WHERE id = %s",
+            (claim_id,),
+        )
+        claim = cursor.fetchone()
+        if claim is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="认领不存在")
+        if claim["user_id"] != user["user_id"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权释放认领")
+
+        cursor.execute("DELETE FROM text_claims WHERE id = %s", (claim_id,))
+
+    return success_response({"id": claim_id})

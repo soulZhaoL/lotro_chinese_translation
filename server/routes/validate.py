@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..db import db_cursor
+from ..response import success_response
 from .deps import require_auth
 
 router = APIRouter(prefix="/validate", tags=["validation"])
@@ -53,7 +54,9 @@ def validate_text(request: ValidateRequest, _: Dict[str, Any] = Depends(require_
     if len(source_percents) != len(translated_percents):
         errors.append("百分号占位符数量不一致")
 
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors,
-    }
+    return success_response(
+        {
+            "valid": len(errors) == 0,
+            "errors": errors,
+        }
+    )

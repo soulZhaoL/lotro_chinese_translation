@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from ..config import get_config
 from ..db import db_cursor
+from ..response import success_response
 from .deps import require_auth
 
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
@@ -35,6 +36,8 @@ def _apply_pagination(page: int, page_size: int) -> int:
 @router.get("")
 def list_dictionary(
     keyword: Optional[str] = None,
+    term_key: Optional[str] = None,
+    term_value: Optional[str] = None,
     category: Optional[str] = None,
     is_active: Optional[bool] = Query(default=None, alias="is_active"),
     page: int = 1,
@@ -61,6 +64,12 @@ def list_dictionary(
         keyword_value = f"%{keyword}%"
         params.append(keyword_value)
         params.append(keyword_value)
+    if term_key is not None:
+        conditions.append("term_key ILIKE %s")
+        params.append(f"%{term_key}%")
+    if term_value is not None:
+        conditions.append("term_value ILIKE %s")
+        params.append(f"%{term_value}%")
     if category is not None:
         conditions.append("category = %s")
         params.append(category)
@@ -87,12 +96,14 @@ def list_dictionary(
         )
         items = cursor.fetchall()
 
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": effective_page_size,
-    }
+    return success_response(
+        {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": effective_page_size,
+        }
+    )
 
 
 @router.post("")
@@ -109,7 +120,7 @@ def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depe
         )
         entry_id = cursor.fetchone()["id"]
 
-    return {"id": entry_id}
+    return success_response({"id": entry_id})
 
 
 @router.put("/{entry_id}")
@@ -129,4 +140,4 @@ def update_dictionary(entry_id: int, request: DictionaryUpdateRequest, _: Dict[s
             (request.term_key, request.term_value, request.category, request.is_active, entry_id),
         )
 
-    return {"id": entry_id}
+    return success_response({"id": entry_id})

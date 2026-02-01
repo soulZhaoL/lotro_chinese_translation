@@ -1,58 +1,100 @@
 // 应用布局与路由入口。
-import { Layout, Menu, Button } from "antd";
+import { BookOutlined, FileTextOutlined } from "@ant-design/icons";
+import { PageContainer, ProLayout } from "@ant-design/pro-components";
+import { Avatar, Button, Space } from "antd";
 import { useState } from "react";
-import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { clearToken, getToken } from "./api";
-import Dictionary from "./pages/Dictionary";
-import Login from "./pages/Login";
-import TextsList from "./pages/TextsList";
-import Translate from "./pages/Translate";
+import { clearToken, getToken, getUserName } from "./api";
+import Login from "./modules/auth/pages/Login";
+import Dictionary from "./modules/dictionary/pages/Dictionary";
+import TextChanges from "./modules/texts/pages/TextChanges";
+import TextDetail from "./modules/texts/pages/TextDetail";
+import TextEdit from "./modules/texts/pages/TextEdit";
+import TextsList from "./modules/texts/pages/TextsList";
 
-const { Header, Content, Sider } = Layout;
+const menuItems = [
+  {
+    path: "/texts",
+    name: "文本管理",
+    icon: <FileTextOutlined />,
+    routes: [
+      { path: "/texts/:id", name: "文本详情", hideInMenu: true },
+      { path: "/texts/:id/edit", name: "翻译编辑", hideInMenu: true },
+      { path: "/texts/:id/changes", name: "更新记录", hideInMenu: true },
+    ],
+  },
+  {
+    path: "/dictionary",
+    name: "词典管理",
+    icon: <BookOutlined />,
+  },
+];
 
-function AppLayout() {
+interface AppLayoutProps {
+  onLogout: () => void;
+}
+
+function AppLayout({ onLogout }: AppLayoutProps) {
   const location = useLocation();
-  const topSelectedKey = "/home";
-  const sideSelectedKey = location.pathname.startsWith("/dictionary")
-    ? "/dictionary"
-    : "/texts";
+  const navigate = useNavigate();
+  const userName = getUserName();
+  const pathname = location.pathname;
+  const isEditPage = /^\/texts\/\d+\/edit$/.test(pathname);
+  const isChangesPage = /^\/texts\/\d+\/changes$/.test(pathname);
+  const isDetailPage = /^\/texts\/\d+$/.test(pathname);
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Header style={{ display: "flex", alignItems: "center", gap: 24 }}>
-        <div style={{ color: "#fff", fontWeight: 600 }}>LOTRO 汉化</div>
-        <Menu
-          theme="dark"
-          mode="horizontal"
-          selectedKeys={[topSelectedKey]}
-          items={[
-            { key: "/home", label: <Link to="/texts">工作台</Link> },
-          ]}
-        />
-      </Header>
-      <Layout>
-        <Sider width={200} style={{ background: "#fff" }}>
-          <Menu
-            mode="inline"
-            selectedKeys={[sideSelectedKey]}
-            style={{ height: "100%" }}
-            items={[
-              { key: "/texts", label: <Link to="/texts">主文本</Link> },
-              { key: "/dictionary", label: <Link to="/dictionary">词典</Link> },
-            ]}
-          />
-        </Sider>
-        <Content style={{ padding: 24 }}>
-          <Routes>
-            <Route path="/texts" element={<TextsList />} />
-            <Route path="/texts/:id/translate" element={<Translate />} />
-            <Route path="/dictionary" element={<Dictionary />} />
-            <Route path="*" element={<TextsList />} />
-          </Routes>
-        </Content>
-      </Layout>
-    </Layout>
+    <ProLayout
+      title="LOTRO 汉化平台"
+      logo="/icon.ico"
+      layout="mix"
+      location={{ pathname: location.pathname }}
+      route={{ path: "/", routes: menuItems }}
+      menuItemRender={(item, dom) => (
+        <span onClick={() => item.path && navigate(item.path)}>{dom}</span>
+      )}
+      breadcrumbRender={(routers) => {
+        if (isEditPage) {
+          return [
+            { path: "/texts", breadcrumbName: "文本管理" },
+            { path: pathname, breadcrumbName: "翻译编辑" },
+          ];
+        }
+        if (isChangesPage) {
+          return [
+            { path: "/texts", breadcrumbName: "文本管理" },
+            { path: pathname, breadcrumbName: "更新记录" },
+          ];
+        }
+        if (isDetailPage) {
+          return [
+            { path: "/texts", breadcrumbName: "文本管理" },
+            { path: pathname, breadcrumbName: "文本详情" },
+          ];
+        }
+        return routers;
+      }}
+      rightContentRender={() => (
+        <Space size="middle">
+          <Avatar src="/avatar.gif" size="small" />
+          <span>{userName}</span>
+          <Button onClick={onLogout}>退出</Button>
+        </Space>
+      )}
+      contentStyle={{ padding: 16 }}
+    >
+      <PageContainer>
+        <Routes>
+          <Route path="/texts" element={<TextsList />} />
+          <Route path="/texts/:id" element={<TextDetail />} />
+          <Route path="/texts/:id/edit" element={<TextEdit />} />
+          <Route path="/texts/:id/changes" element={<TextChanges />} />
+          <Route path="/dictionary" element={<Dictionary />} />
+          <Route path="*" element={<TextsList />} />
+        </Routes>
+      </PageContainer>
+    </ProLayout>
   );
 }
 
@@ -69,11 +111,8 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <div style={{ position: "fixed", top: 12, right: 16, zIndex: 1000 }}>
-        <Button onClick={handleLogout}>退出</Button>
-      </div>
-      <AppLayout />
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AppLayout onLogout={handleLogout} />
     </BrowserRouter>
   );
 }

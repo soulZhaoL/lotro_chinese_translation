@@ -5,6 +5,7 @@
 ## 技术栈
 - **核心:** Python + FastAPI / React + Ant Design + Vite
 - **前端工具:** vite-plugin-mock
+- **前端组件:** @ant-design/pro-components
 - **数据:** PostgreSQL
 
 ---
