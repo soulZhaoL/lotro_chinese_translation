@@ -44,12 +44,12 @@ def _extract_segment_info(segment: str) -> Tuple[Optional[str], str]:
     segment = segment.strip()
     if not segment:
         return None, segment
-    # 6-10 位数字 + :::::: + [text]
-    match = re.match(r"^(\\d{6,10})::::::\\[(.*)\\]$", segment, re.DOTALL)
+    # 4-10 位数字 + :::::: + [text]
+    match = re.match(r"^(\d{4,10})::::::\[(.*)\]$", segment, re.DOTALL)
     if match:
         return match.group(1), match.group(2)
-    # 6-10 位数字 + ::: + 数字/范围 + ::: + [text]
-    match = re.match(r"^(\\d{6,10}):::[0-9-]+:::\\[(.*)\\]$", segment, re.DOTALL)
+    # 4-10 位数字 + ::: + 数字/范围 + ::: + [text]
+    match = re.match(r"^(\d{4,10}):::[0-9-]+:::\[(.*)\]$", segment, re.DOTALL)
     if match:
         return match.group(1), match.group(2)
     return None, segment
@@ -63,16 +63,24 @@ def _segment_token_diffs(
 
     left_map: List[Tuple[str, str]] = []
     right_map: List[Tuple[str, str]] = []
+    left_invalid: List[Tuple[int, str]] = []
+    right_invalid: List[Tuple[int, str]] = []
 
     for idx, seg in enumerate(left_segments, start=1):
         seg_id, seg_text = _extract_segment_info(seg)
-        key = seg_id or f"__IDX__{idx}"
-        left_map.append((key, seg_text))
+        if seg_id is None:
+            if seg_text.strip():
+                left_invalid.append((idx, seg_text))
+            continue
+        left_map.append((seg_id, seg_text))
 
     for idx, seg in enumerate(right_segments, start=1):
         seg_id, seg_text = _extract_segment_info(seg)
-        key = seg_id or f"__IDX__{idx}"
-        right_map.append((key, seg_text))
+        if seg_id is None:
+            if seg_text.strip():
+                right_invalid.append((idx, seg_text))
+            continue
+        right_map.append((seg_id, seg_text))
 
     # build id -> list of texts, preserving order
     def _group(items: List[Tuple[str, str]]) -> dict:
@@ -85,6 +93,32 @@ def _segment_token_diffs(
     right_grouped = _group(right_map)
 
     diffs: List[Tuple[str, int, int, str, str]] = []
+
+    for idx, seg_text in right_invalid:
+        diffs.append(
+            (
+                f"译文格式错误#{idx}",
+                0,
+                _count_token(seg_text, token),
+                "",
+                seg_text,
+            )
+        )
+        if len(diffs) >= max_items:
+            return diffs
+
+    for idx, seg_text in left_invalid:
+        diffs.append(
+            (
+                f"原文格式错误#{idx}",
+                _count_token(seg_text, token),
+                0,
+                seg_text,
+                "",
+            )
+        )
+        if len(diffs) >= max_items:
+            return diffs
 
     # iterate in left order to keep stable output
     seen_keys: set[str] = set()
@@ -101,7 +135,7 @@ def _segment_token_diffs(
             left_count = _count_token(left_seg, token)
             right_count = _count_token(right_seg, token)
             if left_count != right_count:
-                label = key if not key.startswith("__IDX__") else f"SEG#{key.split('_')[-1]}"
+                label = key
                 diffs.append((label, left_count, right_count, left_seg, right_seg))
                 if len(diffs) >= max_items:
                     return diffs
@@ -120,7 +154,7 @@ def _segment_token_diffs(
             left_count = _count_token(left_seg, token)
             right_count = _count_token(right_seg, token)
             if left_count != right_count:
-                label = key if not key.startswith("__IDX__") else f"SEG#{key.split('_')[-1]}"
+                label = key
                 diffs.append((label, left_count, right_count, left_seg, right_seg))
                 if len(diffs) >= max_items:
                     return diffs
@@ -197,8 +231,15 @@ def _format_mismatch_detail(
 ) -> str:
     lines: List[str] = []
     for seg_label, left_count, right_count, left_seg, right_seg in diffs:
+        if seg_label.startswith("译文格式错误#"):
+            lines.append(f"{seg_label}: {_summarize_segment(right_seg, snippet_len)}")
+            continue
+        if seg_label.startswith("原文格式错误#"):
+            lines.append(f"{seg_label}: {_summarize_segment(left_seg, snippet_len)}")
+            continue
+        status = "缺失" if right_count < left_count else "多出"
         lines.append(
-            f"{seg_label} L{left_count}->R{right_count}: "
+            f"{seg_label} {status} L{left_count}->R{right_count}: "
             f"{_summarize_segment(left_seg, snippet_len)}"
         )
         lines.append(f"{seg_label} R: {_summarize_segment(right_seg, snippet_len)}")
@@ -357,3 +398,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# python ./tools/xlsx_token_check.py --row-start 2 --row-end 1000000 --compare-column D --output-mismatch-xlsx mismatch.xlsx 

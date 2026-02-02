@@ -12,7 +12,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import column_index_from_string
 
 
-_ID_PATTERN = r"\d{6,10}"
+_ID_PATTERN = r"\d{4,10}"
 _PATTERN_COLON6 = re.compile(rf"^{_ID_PATTERN}::::::\[.*\]$", re.DOTALL)
 _PATTERN_TRIPLE_COLON_NUM = re.compile(rf"^{_ID_PATTERN}:::\d+:::\[.*\]$", re.DOTALL)
 _PATTERN_TRIPLE_COLON_RANGE = re.compile(
@@ -420,5 +420,5 @@ if __name__ == "__main__":
     main()
     # 数字::::::[]
     #  /Users/zhaolei/miniconda3/envs/lotro/bin/python /Users/zhaolei/My/my-python/lotro_chinese_translation/tools/xlsx_format_check.py --compare-column D --row-start 2 --row-end 1000000  --show-mismatch --output-mismatch-xlsx mismatch.xlsx --workers 8 --progress-every 10000 
-    # <--DO_NOT_TOUCH!-->
+    
     
