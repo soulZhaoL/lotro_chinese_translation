@@ -19,6 +19,7 @@
 | 202602010029 | xlsx 批量 INSERT 生成脚本 | 功能 | ✅已完成 | 2026-02/202602010029_xlsx_insert_script/ |
 | 202602011306 | 文本状态数值枚举化 | 功能 | ✅已完成 | 2026-02/202602011306_status_smallint/ |
 | 202602011342 | 原文允许为空 | 功能 | ✅已完成 | 2026-02/202602011342_nullable_source_text/ |
+| 202602021030 | xlsx 固定格式计数脚本 | 功能 | ✅已完成 | 2026-02/202602021030_xlsx_format_check/ |
 
 ---
 
@@ -40,3 +41,4 @@
 - [202602010029_xlsx_insert_script](2026-02/202602010029_xlsx_insert_script/) - xlsx 批量 INSERT 生成脚本
 - [202602011306_status_smallint](2026-02/202602011306_status_smallint/) - 文本状态数值枚举化
 - [202602011342_nullable_source_text](2026-02/202602011342_nullable_source_text/) - 原文允许为空
+- [202602021030_xlsx_format_check](2026-02/202602021030_xlsx_format_check/) - xlsx 固定格式计数脚本
