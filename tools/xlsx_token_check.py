@@ -66,12 +66,12 @@ def _segment_token_diffs(
 
     for idx, seg in enumerate(left_segments, start=1):
         seg_id, seg_text = _extract_segment_info(seg)
-        key = seg_id or f\"__IDX__{idx}\"
+        key = seg_id or f"__IDX__{idx}"
         left_map.append((key, seg_text))
 
     for idx, seg in enumerate(right_segments, start=1):
         seg_id, seg_text = _extract_segment_info(seg)
-        key = seg_id or f\"__IDX__{idx}\"
+        key = seg_id or f"__IDX__{idx}"
         right_map.append((key, seg_text))
 
     # build id -> list of texts, preserving order
@@ -101,7 +101,7 @@ def _segment_token_diffs(
             left_count = _count_token(left_seg, token)
             right_count = _count_token(right_seg, token)
             if left_count != right_count:
-                label = key if not key.startswith(\"__IDX__\") else f\"SEG#{key.split('_')[-1]}\"
+                label = key if not key.startswith("__IDX__") else f"SEG#{key.split('_')[-1]}"
                 diffs.append((label, left_count, right_count, left_seg, right_seg))
                 if len(diffs) >= max_items:
                     return diffs
@@ -120,7 +120,7 @@ def _segment_token_diffs(
             left_count = _count_token(left_seg, token)
             right_count = _count_token(right_seg, token)
             if left_count != right_count:
-                label = key if not key.startswith(\"__IDX__\") else f\"SEG#{key.split('_')[-1]}\"
+                label = key if not key.startswith("__IDX__") else f"SEG#{key.split('_')[-1]}"
                 diffs.append((label, left_count, right_count, left_seg, right_seg))
                 if len(diffs) >= max_items:
                     return diffs
@@ -235,7 +235,7 @@ def _analyze_compare_row(
     right_text: str,
     token: str,
     max_items: int,
-) -> Tuple[int, str, str, int, int, List[Tuple[int, int, int, str, str]]]:
+) -> Tuple[int, str, str, int, int, List[Tuple[str, int, int, str, str]]]:
     left_count = _count_token(left_text, token)
     right_count = _count_token(right_text, token)
     diffs = _segment_token_diffs(left_text, right_text, token, max_items)
@@ -338,13 +338,13 @@ def main() -> None:
                 )
             if not match and args.show_mismatch:
                 print(f"--- row {row_index} ---")
-                for seg_index, left_c, right_c, left_seg, right_seg in diffs[: args.max_items]:
+                for seg_label, left_c, right_c, left_seg, right_seg in diffs[: args.max_items]:
                     print(
-                        f"S#{seg_index} L{left_c}->R{right_c}: "
+                        f"{seg_label} L{left_c}->R{right_c}: "
                         f"{_summarize_segment(left_seg, args.snippet_len)}"
                     )
                     print(
-                        f"S#{seg_index} R: {_summarize_segment(right_seg, args.snippet_len)}"
+                        f"{seg_label} R: {_summarize_segment(right_seg, args.snippet_len)}"
                     )
             completed += 1
             if args.progress_every and completed % args.progress_every == 0:
