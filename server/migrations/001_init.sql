@@ -92,7 +92,8 @@ COMMENT ON COLUMN role_permissions.perm_id IS '权限ID';
 CREATE TABLE text_main (
   id BIGSERIAL PRIMARY KEY,
   fid VARCHAR(64) NOT NULL,
-  part VARCHAR(64) NOT NULL,
+  text_id BIGINT NOT NULL,
+  part INTEGER NOT NULL,
   source_text TEXT,
   translated_text TEXT,
   status SMALLINT NOT NULL DEFAULT 1,
@@ -106,7 +107,8 @@ CREATE TABLE text_main (
 COMMENT ON TABLE text_main IS '主文本与翻译表';
 COMMENT ON COLUMN text_main.id IS '主键ID';
 COMMENT ON COLUMN text_main.fid IS '文件标识';
-COMMENT ON COLUMN text_main.part IS '分段标识';
+COMMENT ON COLUMN text_main.text_id IS '文本标识';
+COMMENT ON COLUMN text_main.part IS '分段顺序';
 COMMENT ON COLUMN text_main.source_text IS '原文（允许为空）';
 COMMENT ON COLUMN text_main.translated_text IS '译文';
 COMMENT ON COLUMN text_main.status IS '文本状态（1=新增, 2=修改, 3=已完成）';
@@ -114,7 +116,11 @@ COMMENT ON COLUMN text_main.is_claimed IS '认领状态（false=未认领, true=
 COMMENT ON COLUMN text_main.edit_count IS '变更次数';
 COMMENT ON COLUMN text_main.updated_at IS '最近更新时间';
 COMMENT ON COLUMN text_main.created_at IS '创建时间';
-CREATE UNIQUE INDEX uq_text_main_fid_part ON text_main(fid, part);
+CREATE INDEX idx_text_main_fid ON text_main(fid);
+CREATE INDEX idx_text_main_fid_part ON text_main(fid, part);
+CREATE INDEX idx_text_main_text_id ON text_main(text_id);
+CREATE INDEX idx_text_main_fid_text_id ON text_main(fid, text_id);
+CREATE INDEX idx_text_main_part1 ON text_main(fid) WHERE part = 1;
 CREATE INDEX idx_text_main_status ON text_main(status);
 CREATE INDEX idx_text_main_updated_at ON text_main(updated_at DESC);
 CREATE INDEX idx_text_main_source_trgm ON text_main USING GIN (source_text gin_trgm_ops);

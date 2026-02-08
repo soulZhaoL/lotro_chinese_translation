@@ -19,9 +19,9 @@ const menuItems = [
     name: "文本管理",
     icon: <FileTextOutlined />,
     routes: [
-      { path: "/texts/:id", name: "文本详情", hideInMenu: true },
-      { path: "/texts/:id/edit", name: "翻译编辑", hideInMenu: true },
-      { path: "/texts/:id/changes", name: "更新记录", hideInMenu: true },
+      { path: "/texts/:fid/:textId", name: "文本详情", hideInMenu: true },
+      { path: "/texts/:fid/:textId/edit", name: "翻译编辑", hideInMenu: true },
+      { path: "/texts/:fid/:textId/changes", name: "更新记录", hideInMenu: true },
     ],
   },
   {
@@ -40,9 +40,9 @@ function AppLayout({ onLogout }: AppLayoutProps) {
   const navigate = useNavigate();
   const userName = getUserName();
   const pathname = location.pathname;
-  const isEditPage = /^\/texts\/\d+\/edit$/.test(pathname);
-  const isChangesPage = /^\/texts\/\d+\/changes$/.test(pathname);
-  const isDetailPage = /^\/texts\/\d+$/.test(pathname);
+  const isEditPage = /^\/texts\/[^/]+\/\d+\/edit$/.test(pathname);
+  const isChangesPage = /^\/texts\/[^/]+\/\d+\/changes$/.test(pathname);
+  const isDetailPage = /^\/texts\/[^/]+\/\d+$/.test(pathname);
 
   return (
     <ProLayout
@@ -51,6 +51,12 @@ function AppLayout({ onLogout }: AppLayoutProps) {
       layout="mix"
       location={{ pathname: location.pathname }}
       route={{ path: "/", routes: menuItems }}
+      token={{
+        pageContainer: {
+          paddingInlinePageContainerContent: 8,
+          paddingBlockPageContainerContent: 12,
+        },
+      }}
       menuItemRender={(item, dom) => (
         <span onClick={() => item.path && navigate(item.path)}>{dom}</span>
       )}
@@ -82,14 +88,13 @@ function AppLayout({ onLogout }: AppLayoutProps) {
           <Button onClick={onLogout}>退出</Button>
         </Space>
       )}
-      contentStyle={{ padding: 16 }}
     >
       <PageContainer>
         <Routes>
           <Route path="/texts" element={<TextsList />} />
-          <Route path="/texts/:id" element={<TextDetail />} />
-          <Route path="/texts/:id/edit" element={<TextEdit />} />
-          <Route path="/texts/:id/changes" element={<TextChanges />} />
+          <Route path="/texts/:fid/:textId" element={<TextDetail />} />
+          <Route path="/texts/:fid/:textId/edit" element={<TextEdit />} />
+          <Route path="/texts/:fid/:textId/changes" element={<TextChanges />} />
           <Route path="/dictionary" element={<Dictionary />} />
           <Route path="*" element={<TextsList />} />
         </Routes>

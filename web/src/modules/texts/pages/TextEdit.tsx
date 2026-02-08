@@ -1,7 +1,7 @@
 // 文本编辑页面。
 import { Button, Card, Input, Row, Col, Switch, Typography, message } from "antd";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { apiFetch, getErrorMessage } from "../../../api";
 
@@ -9,50 +9,82 @@ interface TextDetailResponse {
   text: {
     id: number;
     fid: string;
-    part: string;
+    text_id: number;
+    part: number;
     source_text: string | null;
     translated_text: string | null;
     status: number;
   };
 }
 
+type ListStateSnapshot = {
+  search: Record<string, unknown>;
+  page: number;
+  pageSize: number;
+  expandedRowKeys: Array<string | number>;
+  childQueries: Record<string, { page: number; pageSize: number; textId?: string }>;
+};
+
+const STORAGE_KEY = "texts_list_state";
+
+function getStoredListState(): ListStateSnapshot | null {
+  const raw = sessionStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as ListStateSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 export default function TextEdit() {
   const params = useParams();
-  const textId = Number(params.id);
+  const fid = params.fid || "";
+  const textId = Number(params.textId);
   const [detail, setDetail] = useState<TextDetailResponse | null>(null);
   const [translated, setTranslated] = useState("");
   const [reason, setReason] = useState("");
   const [markCompleted, setMarkCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const listState = useMemo(() => {
+    const state = location.state as { listState?: ListStateSnapshot } | null;
+    return state?.listState || getStoredListState();
+  }, [location.state]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await apiFetch<TextDetailResponse>(`/texts/${textId}`);
+        const response = await apiFetch<TextDetailResponse>(
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&text_id=${textId}`
+        );
         setDetail(response);
         setTranslated(response.text.translated_text || "");
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
       }
     };
-    if (Number.isFinite(textId)) {
+    if (fid && Number.isFinite(textId)) {
       void load();
     }
-  }, [textId]);
+  }, [fid, textId]);
 
   const handleSave = async () => {
     try {
-      if (saving) {
+      if (saving || !detail) {
         return;
       }
       setSaving(true);
-      await apiFetch(`/texts/${textId}/translate`, {
+      await apiFetch(`/texts/${detail.text.id}/translate`, {
         method: "PUT",
         body: JSON.stringify({ translated_text: translated, reason, is_completed: markCompleted }),
       });
       message.success("保存成功");
-      navigate("/texts", { state: { refresh: true } });
+      navigate("/texts", { state: { refresh: true, listState } });
     } catch (error) {
       message.error(getErrorMessage(error, "保存失败"));
     } finally {
@@ -66,6 +98,9 @@ export default function TextEdit() {
 
   return (
     <div>
+      <Typography.Paragraph>
+        FID: {detail.text.fid} / TextId: {detail.text.text_id} / Part: {detail.text.part}
+      </Typography.Paragraph>
       <Row gutter={16}>
         <Col xs={24} sm={24} md={12} lg={12} xl={12} xxl={12} style={{ minWidth: 0 }}>
           <Card title="原文">

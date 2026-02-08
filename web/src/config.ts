@@ -29,11 +29,18 @@ export async function loadAppConfig(): Promise<AppConfig> {
   if (cachedConfig) {
     return cachedConfig;
   }
-  const response = await fetch("/app-config.json", { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("前端配置文件不存在: /app-config.json");
+  const useMockRaw = import.meta.env.VITE_USE_MOCK;
+  if (useMockRaw === undefined) {
+    throw new Error("前端配置缺少 VITE_USE_MOCK");
   }
-  const payload = await response.json();
+  const apiBaseUrlRaw = import.meta.env.VITE_API_BASE_URL;
+  if (apiBaseUrlRaw === undefined) {
+    throw new Error("前端配置缺少 VITE_API_BASE_URL");
+  }
+  const payload = {
+    apiBaseUrl: apiBaseUrlRaw,
+    useMock: useMockRaw === "true",
+  };
   cachedConfig = validateConfig(payload);
   return cachedConfig;
 }

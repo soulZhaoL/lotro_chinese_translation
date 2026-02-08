@@ -215,3 +215,6 @@ work_text/
 node_modules/
 web/node_modules/
 .env 
+
+.DS_Store
+*.xlsx

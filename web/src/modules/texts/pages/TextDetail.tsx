@@ -10,7 +10,8 @@ interface TextDetailResponse {
   text: {
     id: number;
     fid: string;
-    part: string;
+    text_id: number;
+    part: number;
     source_text: string | null;
     translated_text: string | null;
     status: number;
@@ -30,22 +31,25 @@ const statusMeta: Record<number, { label: string; color: string }> = {
 
 export default function TextDetail() {
   const params = useParams();
-  const textId = Number(params.id);
+  const fid = params.fid || "";
+  const textId = Number(params.textId);
   const [detail, setDetail] = useState<TextDetailResponse | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await apiFetch<TextDetailResponse>(`/texts/${textId}`);
+        const response = await apiFetch<TextDetailResponse>(
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&text_id=${textId}`
+        );
         setDetail(response);
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
       }
     };
-    if (Number.isFinite(textId)) {
+    if (fid && Number.isFinite(textId)) {
       void load();
     }
-  }, [textId]);
+  }, [fid, textId]);
 
   if (!detail) {
     return <Typography.Text>加载中...</Typography.Text>;
@@ -53,12 +57,9 @@ export default function TextDetail() {
 
   return (
     <div>
-      <Descriptions
-        bordered
-        size="small"
-        column={{ xs: 1, sm: 2, md: 2, lg: 4, xl: 4, xxl: 4 }}
-      >
+      <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 2, lg: 4, xl: 4, xxl: 4 }}>
         <Descriptions.Item label="FID">{detail.text.fid}</Descriptions.Item>
+        <Descriptions.Item label="TextId">{detail.text.text_id}</Descriptions.Item>
         <Descriptions.Item label="Part">{detail.text.part}</Descriptions.Item>
         <Descriptions.Item label="状态">
           <Tag color={statusMeta[detail.text.status]?.color || "default"}>

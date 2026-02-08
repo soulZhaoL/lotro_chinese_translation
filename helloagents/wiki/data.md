@@ -53,7 +53,8 @@
 |------|------|------|
 | id | bigint | 主键 |
 | fid | varchar | 文件标识 |
-| part | varchar | 分段标识 |
+| text_id | bigint | 文本标识 |
+| part | int | 分段顺序 |
 | source_text | text | 原文（允许为空） |
 | translated_text | text | 译文 |
 | status | smallint | 状态（1=新增/2=修改/3=已完成） |
@@ -63,7 +64,8 @@
 | created_at | timestamp | 创建时间 |
 
 #### 索引与性能
-- 唯一索引: (fid, part)
+- 查询索引: fid, (fid, part), text_id, (fid, text_id)
+- 部分索引: (fid) WHERE part=1
 - 筛选索引: status, updated_at
 - 关键词检索: source_text/translated_text 使用 GIN + pg_trgm
 

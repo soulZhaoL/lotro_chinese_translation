@@ -29,6 +29,9 @@
 - 词典新增弹窗表单
 - 文本编辑保存后返回列表并刷新
 - xlsx 固定格式计数脚本（支持 C/D 列对比）
+- 文本父/子列表专用接口（/texts/parents, /texts/children, /texts/by-textid）
+- 主文本列表嵌套子列表（textId 查询 + 分页）
+- 详情/编辑页支持 fid + textId 精确查询
 
 ### 变更
 - 文本表状态改为数值枚举（1=新增/2=修改/3=已完成），新增认领状态字段 is_claimed
@@ -47,6 +50,8 @@
 - 前端构建工具升级至 Vite 7（修复 esbuild 风险）
 - 主文本列表列宽调整（原文/译文扩大，操作列缩小）
 - 长文本预览由 Tooltip 改为 Popover（限高滚动）
+- text_main 新增 text_id，part 调整为顺序编号并新增索引，移除 fid+part 唯一约束
+- xlsx 导入配置新增 text_id 列映射
 
 ### 修复
 - 数据模型文档补齐 text_locks.released_at 字段

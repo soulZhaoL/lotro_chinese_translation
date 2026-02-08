@@ -29,7 +29,7 @@ void (async () => {
       <React.StrictMode>
         <ConfigProvider locale={zhCN}>
           <div style={{ padding: 24 }}>
-            前端配置加载失败，请检查 /app-config.json
+            前端配置加载失败，请检查 .env 的 VITE_* 配置
           </div>
         </ConfigProvider>
       </React.StrictMode>

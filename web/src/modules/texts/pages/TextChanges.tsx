@@ -21,9 +21,16 @@ interface ChangesResponse {
   items: ChangeItem[];
 }
 
+interface TextDetailResponse {
+  text: {
+    id: number;
+  };
+}
+
 export default function TextChanges() {
   const params = useParams();
-  const textId = Number(params.id);
+  const fid = params.fid || "";
+  const textId = Number(params.textId);
   const [data, setData] = useState<ChangeItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +38,10 @@ export default function TextChanges() {
     const load = async () => {
       setLoading(true);
       try {
-        const response = await apiFetch<ChangesResponse>(`/changes?text_id=${textId}`);
+        const detail = await apiFetch<TextDetailResponse>(
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&text_id=${textId}`
+        );
+        const response = await apiFetch<ChangesResponse>(`/changes?text_id=${detail.text.id}`);
         setData(response.items);
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
@@ -39,10 +49,10 @@ export default function TextChanges() {
         setLoading(false);
       }
     };
-    if (Number.isFinite(textId)) {
+    if (fid && Number.isFinite(textId)) {
       void load();
     }
-  }, [textId]);
+  }, [fid, textId]);
 
   const columns: ColumnsType<ChangeItem> = [
     { title: "时间", dataIndex: "changed_at", render: (val) => formatDateTime(val) },

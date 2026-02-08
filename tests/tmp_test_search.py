@@ -15,24 +15,24 @@ def test_keyword_search(seed_user):
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO text_main (fid, part, source_text, translated_text, status, edit_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO text_main (fid, text_id, part, source_text, translated_text, status, edit_count)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            ("file_a", "p1", "hello world", None, "待认领", 0),
+            ("file_a", 1001, 1, "hello world", None, 1, 0),
         )
         cursor.execute(
             """
-            INSERT INTO text_main (fid, part, source_text, translated_text, status, edit_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO text_main (fid, text_id, part, source_text, translated_text, status, edit_count)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            ("file_b", "p2", "other content", None, "待认领", 0),
+            ("file_b", 2002, 1, "other content", None, 1, 0),
         )
 
     client = TestClient(app)
     token = _login(client, seed_user)
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.get("/texts?source_keyword=hello", headers=headers)
+    response = client.get("/texts/parents?source_keyword=hello", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1

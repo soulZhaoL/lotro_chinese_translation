@@ -15,11 +15,11 @@ def test_lock_conflict(seed_user):
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO text_main (fid, part, source_text, translated_text, status, edit_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO text_main (fid, text_id, part, source_text, translated_text, status, edit_count)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            ("file_a", "p1", "hello", None, "待认领", 0),
+            ("file_a", 1001, 1, "hello", None, 1, 0),
         )
         text_id = cursor.fetchone()["id"]
 

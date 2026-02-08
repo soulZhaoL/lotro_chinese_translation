@@ -53,10 +53,10 @@
 
 ### 主文本与任务
 
-#### [GET] /texts
-**描述:** 获取主文本列表（支持筛选与分页）
+#### [GET] /texts/parents
+**描述:** 获取父级主文本列表（仅 part=1，支持筛选与分页）
 
-**请求参数:** fid/part/status(1=新增/2=修改/3=已完成)/source_keyword/translated_keyword/updated_from/updated_to/claimer/claimed/page/page_size
+**请求参数:** fid/status(1=新增/2=修改/3=已完成)/source_keyword/translated_keyword/updated_from/updated_to/claimer/claimed/page/page_size
 
 **响应:**
 ```json
@@ -65,7 +65,8 @@
     {
       "id": 1,
       "fid": "file_a",
-      "part": "p1",
+      "text_id": 10001,
+      "part": 1,
       "status": 1,
       "claim_id": 10,
       "claimed_by": "tester",
@@ -79,20 +80,41 @@
 }
 ```
 
-#### [GET] /texts/{id}
-**描述:** 获取主文本详情
+#### [GET] /texts/children
+**描述:** 获取指定 fid 的子列表（默认排除 part=1）
+
+**请求参数:** fid（必填）/text_id（可选）/source_keyword（可选）/translated_keyword（可选）/page/page_size
+
+**响应:** 同父列表结构，按 part 升序
+
+#### [GET] /texts/by-textid
+**描述:** fid + textId 精确查询
+
+**请求参数:** fid/text_id
 
 **响应:**
 ```json
 {
-  "text": { "id": 1, "fid": "file_a", "part": "p1" },
+  "text": { "id": 1, "fid": "file_a", "text_id": 10001, "part": 1 },
+  "claims": [],
+  "locks": []
+}
+```
+
+#### [GET] /texts/{id}
+**描述:** 获取主文本详情（内部 ID）
+
+**响应:**
+```json
+{
+  "text": { "id": 1, "fid": "file_a", "text_id": 10001, "part": 1 },
   "claims": [],
   "locks": []
 }
 ```
 
 #### [POST] /claims
-**描述:** 认领任务（fid + part）
+**描述:** 认领任务（text_main.id）
 
 **响应:**
 ```json
