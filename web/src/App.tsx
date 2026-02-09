@@ -48,7 +48,7 @@ function AppLayout({ onLogout }: AppLayoutProps) {
 
   return (
     <ProLayout
-      title="LOTRO 汉化平台"
+      title={<span className="lotro-brand-title">LOTRO 汉化平台</span>}
       logo="/icon.ico"
       layout="mix"
       location={{ pathname: location.pathname }}

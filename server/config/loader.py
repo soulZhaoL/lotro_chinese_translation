@@ -126,6 +126,8 @@ def load_config() -> Dict[str, Any]:
 
     maintenance_enabled = _parse_bool(_require_key(maintenance, "enabled", "maintenance."), "maintenance.enabled")
     maintenance_message = _require_type(_require_key(maintenance, "message", "maintenance."), str, "maintenance.message")
+    if not maintenance_message.strip():
+        raise ConfigError("配置项无效: maintenance.message 不能为空")
     maintenance_allow_paths = _require_type(
         _require_key(maintenance, "allow_paths", "maintenance."),
         list,

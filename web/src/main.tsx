@@ -8,6 +8,7 @@ import App from "./App";
 import { loadAppConfig } from "./config";
 import { fetchMaintenanceState } from "./maintenance";
 import "antd/dist/reset.css";
+import "./pro_layout_overrides.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 

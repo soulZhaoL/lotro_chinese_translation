@@ -1,0 +1,11 @@
+/* ProLayout 样式微调：避免折叠按钮遮挡页面标题 */
+.ant-pro-layout-mix .ant-pro-page-container .ant-page-header-heading-title {
+  padding-inline-start: 24px;
+}
+
+/* 左上角站点标题使用“隶书”风格（按系统字体可用性自动回退） */
+.lotro-brand-title {
+  font-family: "STLiti", "LiSu", "隶书", "STKaiti", "KaiTi", serif;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
