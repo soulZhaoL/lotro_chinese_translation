@@ -4,7 +4,8 @@
 }
 
 /* 左上角站点标题使用“隶书”风格（按系统字体可用性自动回退） */
-.lotro-brand-title {
+.ant-pro-global-header-logo h1,
+.ant-pro-sider-logo > a > h1 {
   font-family: "STLiti", "LiSu", "隶书", "STKaiti", "KaiTi", serif;
   font-weight: 400;
   letter-spacing: 0.5px;
