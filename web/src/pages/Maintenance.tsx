@@ -20,7 +20,7 @@ export default function Maintenance({ message }: MaintenanceProps) {
       }}
     >
       <Result
-        status="503"
+        status="warning"
         title="系统维护中"
         subTitle={
           <Typography.Paragraph style={{ marginBottom: 0 }}>{description}</Typography.Paragraph>

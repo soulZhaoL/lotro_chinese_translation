@@ -37,7 +37,9 @@ export function setMaintenanceState(next: Partial<MaintenanceState>) {
 
 export function subscribeMaintenance(listener: (nextState: MaintenanceState) => void) {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export async function fetchMaintenanceState(): Promise<MaintenanceState> {
