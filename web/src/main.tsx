@@ -6,6 +6,7 @@ import zhCN from "antd/locale/zh_CN";
 
 import App from "./App";
 import { loadAppConfig } from "./config";
+import { fetchMaintenanceState } from "./maintenance";
 import "antd/dist/reset.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
@@ -23,6 +24,7 @@ const renderApp = () => {
 void (async () => {
   try {
     await loadAppConfig();
+    await fetchMaintenanceState();
     renderApp();
   } catch (error) {
     root.render(

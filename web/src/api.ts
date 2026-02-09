@@ -1,5 +1,6 @@
 // API 访问封装与鉴权。
 import { getAppConfig } from "./config";
+import { setMaintenanceState } from "./maintenance";
 
 const TOKEN_KEY = "lotro_token";
 const USER_NAME_KEY = "lotro_user_name";
@@ -61,12 +62,21 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   if (payload && typeof payload === "object" && "success" in payload && "code" in payload) {
     if (payload.code !== "0000") {
+      if (payload.code === "MAINTENANCE") {
+        setMaintenanceState({
+          enabled: true,
+          message: typeof payload.message === "string" ? payload.message : undefined,
+        });
+      }
       throw new Error(payload.message || "请求失败");
     }
     return payload.data as T;
   }
 
   if (!response.ok) {
+    if (response.status === 503) {
+      setMaintenanceState({ enabled: true });
+    }
     const text = payload ? JSON.stringify(payload) : await response.text();
     throw new Error(text || `请求失败: ${response.status}`);
   }

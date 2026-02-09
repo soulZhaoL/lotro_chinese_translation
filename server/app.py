@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from .config import get_config
 from .response import error_response
 from .routes import auth, changes, claims, dictionary, health, locks, texts, validate
+from .services.maintenance import build_maintenance_response, get_allow_paths, is_maintenance_enabled, is_path_allowed
 
 
 def create_app() -> FastAPI:
@@ -26,6 +27,14 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(GZipMiddleware, minimum_size=config["http"]["gzip_minimum_size"])
+
+    @app.middleware("http")
+    async def maintenance_middleware(request: Request, call_next):
+        if is_maintenance_enabled():
+            path = request.url.path
+            if not is_path_allowed(path, get_allow_paths()):
+                return build_maintenance_response()
+        return await call_next(request)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:

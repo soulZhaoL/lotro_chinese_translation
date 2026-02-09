@@ -8,7 +8,7 @@ import yaml
 from dotenv import load_dotenv
 
 
-_REQUIRED_TOP_LEVEL_KEYS = ("database", "auth", "pagination", "locks", "cors", "http", "text_list")
+_REQUIRED_TOP_LEVEL_KEYS = ("database", "auth", "pagination", "locks", "cors", "http", "text_list", "maintenance")
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
 
@@ -26,6 +26,18 @@ def _require_type(value: Any, expected_type: type, path: str) -> Any:
     if not isinstance(value, expected_type):
         raise ConfigError(f"配置项类型错误: {path} 期望 {expected_type.__name__}")
     return value
+
+
+def _parse_bool(value: Any, path: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    raise ConfigError(f"配置项类型错误: {path} 期望 bool")
 
 
 def _project_root() -> Path:
@@ -90,6 +102,7 @@ def load_config() -> Dict[str, Any]:
     cors = _require_type(_require_key(data, "cors", ""), dict, "cors")
     http = _require_type(_require_key(data, "http", ""), dict, "http")
     text_list = _require_type(_require_key(data, "text_list", ""), dict, "text_list")
+    maintenance = _require_type(_require_key(data, "maintenance", ""), dict, "maintenance")
 
     _require_type(_require_key(database, "dsn", "database."), str, "database.dsn")
 
@@ -110,6 +123,20 @@ def load_config() -> Dict[str, Any]:
     _require_type(_require_key(cors, "max_age", "cors."), int, "cors.max_age")
     _require_type(_require_key(http, "gzip_minimum_size", "http."), int, "http.gzip_minimum_size")
     _require_type(_require_key(text_list, "max_text_length", "text_list."), int, "text_list.max_text_length")
+
+    maintenance_enabled = _parse_bool(_require_key(maintenance, "enabled", "maintenance."), "maintenance.enabled")
+    maintenance_message = _require_type(_require_key(maintenance, "message", "maintenance."), str, "maintenance.message")
+    maintenance_allow_paths = _require_type(
+        _require_key(maintenance, "allow_paths", "maintenance."),
+        list,
+        "maintenance.allow_paths",
+    )
+    for idx, item in enumerate(maintenance_allow_paths):
+        _require_type(item, str, f"maintenance.allow_paths[{idx}]")
+
+    maintenance["enabled"] = maintenance_enabled
+    maintenance["message"] = maintenance_message
+    maintenance["allow_paths"] = maintenance_allow_paths
 
     return data
 

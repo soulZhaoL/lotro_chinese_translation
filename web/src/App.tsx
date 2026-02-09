@@ -2,16 +2,18 @@
 import { BookOutlined, FileTextOutlined } from "@ant-design/icons";
 import { PageContainer, ProLayout } from "@ant-design/pro-components";
 import { Avatar, Button, Space } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { clearToken, getToken, getUserName } from "./api";
+import { getMaintenanceState, subscribeMaintenance } from "./maintenance";
 import Login from "./modules/auth/pages/Login";
 import Dictionary from "./modules/dictionary/pages/Dictionary";
 import TextChanges from "./modules/texts/pages/TextChanges";
 import TextDetail from "./modules/texts/pages/TextDetail";
 import TextEdit from "./modules/texts/pages/TextEdit";
 import TextsList from "./modules/texts/pages/TextsList";
+import Maintenance from "./pages/Maintenance";
 
 const menuItems = [
   {
@@ -105,11 +107,18 @@ function AppLayout({ onLogout }: AppLayoutProps) {
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(Boolean(getToken()));
+  const [maintenance, setMaintenance] = useState(getMaintenanceState());
+
+  useEffect(() => subscribeMaintenance(setMaintenance), []);
 
   const handleLogout = () => {
     clearToken();
     setAuthenticated(false);
   };
+
+  if (maintenance.enabled) {
+    return <Maintenance message={maintenance.message} />;
+  }
 
   if (!authenticated) {
     return <Login onLogin={() => setAuthenticated(true)} />;
