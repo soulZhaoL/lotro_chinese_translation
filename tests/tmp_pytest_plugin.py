@@ -15,7 +15,12 @@ def config() -> Dict[str, object]:
 
 
 @pytest.fixture(scope="function", autouse=True)
-def ensure_tables(config: Dict[str, object]):
+def ensure_tables(config: Dict[str, object], request):
+    # 维护模式用例不依赖数据库，避免本地无 DB 时被夹具阻断。
+    if request.node.fspath.basename == "test_maintenance.py":
+        yield
+        return
+
     required_tables = [
         "users",
         "roles",
@@ -34,7 +39,9 @@ def ensure_tables(config: Dict[str, object]):
             row = cursor.fetchone()
             if row is None or row["name"] is None:
                 raise RuntimeError(f"缺少数据表: {table}，请先执行迁移")
-        cursor.execute("TRUNCATE text_changes, text_locks, text_claims, dictionary_entries, text_main, user_roles, role_permissions, permissions, roles, users RESTART IDENTITY")
+        cursor.execute(
+            "TRUNCATE text_changes, text_locks, text_claims, dictionary_entries, text_main, user_roles, role_permissions, permissions, roles, users RESTART IDENTITY"
+        )
     yield
 
 
@@ -58,7 +65,7 @@ def seed_user(config: Dict[str, object]):
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO users (username, password_hash, password_salt, is_guest)
+            INSERT INTO users (username, "passwordHash", "passwordSalt", "isGuest")
             VALUES (%s, %s, %s, FALSE)
             RETURNING id
             """,
@@ -66,4 +73,4 @@ def seed_user(config: Dict[str, object]):
         )
         user_id = cursor.fetchone()["id"]
 
-    return {"username": "tester", "password": password, "user_id": user_id}
+    return {"username": "tester", "password": password, "userId": user_id}

@@ -13,7 +13,7 @@ function buildListResponse(items: ReturnType<typeof generateTexts>, query?: Reco
       items,
       total: items.length,
       page: Number(query?.page || 1),
-      page_size: Number(query?.page_size || items.length),
+      pageSize: Number(query?.pageSize || items.length),
     },
   };
 }
@@ -59,7 +59,7 @@ export default [
     method: "get",
     response: ({ query }) => {
       const fid = query?.fid || "";
-      const textId = Number(query?.text_id);
+      const textId = Number(query?.textId);
       const text = generateTextDetailByTextId(fid, textId);
       return {
         success: true,
@@ -68,8 +68,8 @@ export default [
         message: "操作成功",
         data: {
           text,
-          claims: text.claim_id
-            ? [{ id: text.claim_id, user_id: 1, claimed_at: text.claimed_at }]
+          claims: text.claimId
+            ? [{ id: text.claimId, userId: 1, claimedAt: text.claimedAt }]
             : [],
           locks: [],
         },
@@ -89,8 +89,8 @@ export default [
         message: "操作成功",
         data: {
           text,
-          claims: text.claim_id
-            ? [{ id: text.claim_id, user_id: 1, claimed_at: text.claimed_at }]
+          claims: text.claimId
+            ? [{ id: text.claimId, userId: 1, claimedAt: text.claimedAt }]
             : [],
           locks: [],
         },
@@ -102,7 +102,7 @@ export default [
     method: "put",
     response: ({ url, body }) => {
       const id = Number(url.split("/").slice(-2)[0]);
-      const isCompleted = Boolean(body?.is_completed);
+      const isCompleted = Boolean(body?.isCompleted);
       return {
         success: true,
         statusCode: 200,

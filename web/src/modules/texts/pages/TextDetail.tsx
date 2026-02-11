@@ -10,17 +10,17 @@ interface TextDetailResponse {
   text: {
     id: number;
     fid: string;
-    text_id: number;
+    textId: number;
     part: number;
-    source_text: string | null;
-    translated_text: string | null;
+    sourceText: string | null;
+    translatedText: string | null;
     status: number;
-    edit_count: number;
-    updated_at: string;
-    created_at: string;
+    editCount: number;
+    updatedAt: string;
+    createdAt: string;
   };
-  claims: Array<{ id: number; user_id: number; claimed_at: string }>;
-  locks: Array<{ id: number; user_id: number; locked_at: string; expires_at: string; released_at: string | null }>;
+  claims: Array<{ id: number; userId: number; claimedAt: string }>;
+  locks: Array<{ id: number; userId: number; lockedAt: string; expiresAt: string; releasedAt: string | null }>;
 }
 
 const statusMeta: Record<number, { label: string; color: string }> = {
@@ -39,7 +39,7 @@ export default function TextDetail() {
     const load = async () => {
       try {
         const response = await apiFetch<TextDetailResponse>(
-          `/texts/by-textid?fid=${encodeURIComponent(fid)}&text_id=${textId}`
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
         );
         setDetail(response);
       } catch (error) {
@@ -59,26 +59,26 @@ export default function TextDetail() {
     <div>
       <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 2, lg: 4, xl: 4, xxl: 4 }}>
         <Descriptions.Item label="FID">{detail.text.fid}</Descriptions.Item>
-        <Descriptions.Item label="TextId">{detail.text.text_id}</Descriptions.Item>
+        <Descriptions.Item label="TextId">{detail.text.textId}</Descriptions.Item>
         <Descriptions.Item label="Part">{detail.text.part}</Descriptions.Item>
         <Descriptions.Item label="状态">
           <Tag color={statusMeta[detail.text.status]?.color || "default"}>
             {statusMeta[detail.text.status]?.label || "-"}
           </Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="更新时间">{formatDateTime(detail.text.updated_at)}</Descriptions.Item>
-        <Descriptions.Item label="创建时间">{formatDateTime(detail.text.created_at)}</Descriptions.Item>
-        <Descriptions.Item label="变更次数">{detail.text.edit_count}</Descriptions.Item>
+        <Descriptions.Item label="更新时间">{formatDateTime(detail.text.updatedAt)}</Descriptions.Item>
+        <Descriptions.Item label="创建时间">{formatDateTime(detail.text.createdAt)}</Descriptions.Item>
+        <Descriptions.Item label="变更次数">{detail.text.editCount}</Descriptions.Item>
       </Descriptions>
 
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col xs={24} sm={24} md={12} lg={12} xl={12} xxl={12} style={{ minWidth: 0 }}>
           <Typography.Title level={5}>原文</Typography.Title>
-          <Input.TextArea value={detail.text.source_text || ""} rows={24} readOnly style={{ width: "100%" }} />
+          <Input.TextArea value={detail.text.sourceText || ""} rows={24} readOnly style={{ width: "100%" }} />
         </Col>
         <Col xs={24} sm={24} md={12} lg={12} xl={12} xxl={12} style={{ minWidth: 0 }}>
           <Typography.Title level={5}>译文</Typography.Title>
-          <Input.TextArea value={detail.text.translated_text || ""} rows={24} readOnly style={{ width: "100%" }} />
+          <Input.TextArea value={detail.text.translatedText || ""} rows={24} readOnly style={{ width: "100%" }} />
         </Col>
       </Row>
     </div>

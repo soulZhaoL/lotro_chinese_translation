@@ -12,7 +12,7 @@
 
 ## 开发约定
 - **代码规范:** 待定（建议后端 PEP 8，前端 ESLint + Prettier）
-- **命名约定:** 后端 snake_case，前端 camelCase
+- **命名约定:** 后端/前端统一 camelCase（数据库列与 API 字段保持一致）
 
 ---
 

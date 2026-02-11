@@ -27,7 +27,7 @@ def _hash_password(password: str, salt_hex: str, algorithm: str) -> str:
     try:
         salt_bytes = bytes.fromhex(salt_hex)
     except ValueError as exc:
-        raise AuthError("password_salt 必须为 hex 编码") from exc
+        raise AuthError("passwordSalt 必须为 hex 编码") from exc
 
     hasher = hashlib.new(algorithm)
     hasher.update(salt_bytes)
@@ -35,11 +35,11 @@ def _hash_password(password: str, salt_hex: str, algorithm: str) -> str:
     return hasher.hexdigest()
 
 
-def verify_password(password: str, password_hash: str, password_salt: str) -> bool:
+def verify_password(password: str, passwordHash: str, passwordSalt: str) -> bool:
     auth_config = _get_auth_config()
     algorithm = auth_config["hash_algorithm"]
-    computed = _hash_password(password, password_salt, algorithm)
-    return hmac.compare_digest(computed, password_hash)
+    computed = _hash_password(password, passwordSalt, algorithm)
+    return hmac.compare_digest(computed, passwordHash)
 
 
 def _encode_part(data: bytes) -> str:
@@ -90,7 +90,7 @@ def verify_token(token: str) -> Dict[str, Any]:
 def authenticate_user(username: str, password: str) -> Dict[str, Any]:
     with db_cursor() as cursor:
         cursor.execute(
-            "SELECT id, username, password_hash, password_salt, is_guest FROM users WHERE username = %s",
+            'SELECT id, username, "passwordHash", "passwordSalt", "isGuest" FROM users WHERE username = %s',
             (username,),
         )
         user = cursor.fetchone()
@@ -98,15 +98,15 @@ def authenticate_user(username: str, password: str) -> Dict[str, Any]:
         if user is None:
             raise AuthError("用户名或密码错误")
 
-        if not verify_password(password, user["password_hash"], user["password_salt"]):
+        if not verify_password(password, user["passwordHash"], user["passwordSalt"]):
             raise AuthError("用户名或密码错误")
 
         cursor.execute(
             """
             SELECT roles.name
             FROM roles
-            JOIN user_roles ON user_roles.role_id = roles.id
-            WHERE user_roles.user_id = %s
+            JOIN user_roles ON user_roles."roleId" = roles.id
+            WHERE user_roles."userId" = %s
             """,
             (user["id"],),
         )
@@ -114,35 +114,35 @@ def authenticate_user(username: str, password: str) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            SELECT permissions.perm_key
+            SELECT permissions."permKey"
             FROM permissions
-            JOIN role_permissions ON role_permissions.perm_id = permissions.id
-            JOIN user_roles ON user_roles.role_id = role_permissions.role_id
-            WHERE user_roles.user_id = %s
+            JOIN role_permissions ON role_permissions."permId" = permissions.id
+            JOIN user_roles ON user_roles."roleId" = role_permissions."roleId"
+            WHERE user_roles."userId" = %s
             """,
             (user["id"],),
         )
-        permissions = [row["perm_key"] for row in cursor.fetchall()]
+        permissions = [row["permKey"] for row in cursor.fetchall()]
 
     return {
         "id": user["id"],
         "username": user["username"],
-        "is_guest": user["is_guest"],
+        "isGuest": user["isGuest"],
         "roles": roles,
         "permissions": permissions,
     }
 
 
-def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+def get_user_by_id(userId: int) -> Optional[Dict[str, Any]]:
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, username, is_guest FROM users WHERE id = %s", (user_id,))
+        cursor.execute('SELECT id, username, "isGuest" FROM users WHERE id = %s', (userId,))
         user = cursor.fetchone()
         if user is None:
             return None
         return {
             "id": user["id"],
             "username": user["username"],
-            "is_guest": user["is_guest"],
+            "isGuest": user["isGuest"],
         }
 
 
@@ -162,7 +162,7 @@ def issue_login_response(username: str, password: str) -> Dict[str, Any]:
         "user": {
             "id": user["id"],
             "username": user["username"],
-            "is_guest": user["is_guest"],
+            "isGuest": user["isGuest"],
         },
         "roles": user["roles"],
         "permissions": user["permissions"],

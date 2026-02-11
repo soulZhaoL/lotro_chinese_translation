@@ -14,34 +14,34 @@ import { formatDateTime } from "../../../utils/datetime";
 interface TextItem {
   id: number;
   fid: string;
-  text_id: number;
+  textId: number;
   part: number;
-  source_text: string | null;
-  translated_text: string | null;
+  sourceText: string | null;
+  translatedText: string | null;
   status: number;
-  edit_count: number;
-  updated_at: string;
-  created_at: string;
-  claim_id: number | null;
-  claimed_by: string | null;
-  claimed_at: string | null;
-  is_claimed: boolean;
+  editCount: number;
+  updatedAt: string;
+  createdAt: string;
+  claimId: number | null;
+  claimedBy: string | null;
+  claimedAt: string | null;
+  isClaimed: boolean;
 }
 
 interface TextListResponse {
   items: TextItem[];
   total: number;
   page: number;
-  page_size: number;
+  pageSize: number;
 }
 
 interface QueryParams {
   fid?: string;
   status?: number;
-  source_keyword?: string;
-  translated_keyword?: string;
-  updated_from?: string;
-  updated_to?: string;
+  sourceKeyword?: string;
+  translatedKeyword?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
   claimer?: string;
   claimed?: string;
 }
@@ -248,17 +248,17 @@ export default function TextsList() {
       const query = new URLSearchParams();
       query.set("fid", fid);
       query.set("page", String(nextQuery.page));
-      query.set("page_size", String(nextQuery.pageSize));
+      query.set("pageSize", String(nextQuery.pageSize));
       if (nextQuery.textId) {
-        query.set("text_id", nextQuery.textId);
+        query.set("textId", nextQuery.textId);
       }
-      const sourceKeyword = parentSearchRef.current.source_keyword;
+      const sourceKeyword = parentSearchRef.current.sourceKeyword;
       if (sourceKeyword) {
-        query.set("source_keyword", sourceKeyword);
+        query.set("sourceKeyword", sourceKeyword);
       }
-      const translatedKeyword = parentSearchRef.current.translated_keyword;
+      const translatedKeyword = parentSearchRef.current.translatedKeyword;
       if (translatedKeyword) {
-        query.set("translated_keyword", translatedKeyword);
+        query.set("translatedKeyword", translatedKeyword);
       }
       const response = await apiFetch<TextListResponse>(`/texts/children?${query.toString()}`);
       setChildStates((prev) => ({
@@ -348,7 +348,7 @@ export default function TextsList() {
     [fetchChildren]
   );
 
-  const keywordActive = Boolean(parentSearch.source_keyword || parentSearch.translated_keyword);
+  const keywordActive = Boolean(parentSearch.sourceKeyword || parentSearch.translatedKeyword);
 
   const expandFirstOnPage = useCallback(() => {
     const first = pageFids[0];
@@ -370,7 +370,7 @@ export default function TextsList() {
         dataIndex: "id",
         hideInSearch: true,
         render: (_, record) => (
-          <Button type="link" onClick={() => navigateWithState(`/texts/${record.fid}/${record.text_id}`)}>
+          <Button type="link" onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}`)}>
             {record.id}
           </Button>
         ),
@@ -381,21 +381,21 @@ export default function TextsList() {
         hideInSearch: true,
         render: (_, record) => <Typography.Text copyable={{ text: record.fid }}>{record.fid}</Typography.Text>,
       },
-      { title: "TextId", dataIndex: "text_id", hideInSearch: true },
+      { title: "TextId", dataIndex: "textId", hideInSearch: true },
       { title: "Part", dataIndex: "part", hideInSearch: true },
       {
         title: "原文",
-        dataIndex: "source_text",
+        dataIndex: "sourceText",
         hideInSearch: true,
         width: 280,
-        render: (_, record) => renderLongText(record.source_text, parentSearch.source_keyword),
+        render: (_, record) => renderLongText(record.sourceText, parentSearch.sourceKeyword),
       },
       {
         title: "译文",
-        dataIndex: "translated_text",
+        dataIndex: "translatedText",
         hideInSearch: true,
         width: 280,
-        render: (_, record) => renderLongText(record.translated_text, parentSearch.translated_keyword),
+        render: (_, record) => renderLongText(record.translatedText, parentSearch.translatedKeyword),
       },
       {
         title: "状态",
@@ -406,11 +406,11 @@ export default function TextsList() {
           return <Tag color={meta?.color || "default"}>{meta?.label || "-"}</Tag>;
         },
       },
-      { title: "编辑次数", dataIndex: "edit_count", hideInSearch: true },
-      { title: "认领人", dataIndex: "claimed_by", hideInSearch: true, renderText: (val) => val || "-" },
+      { title: "编辑次数", dataIndex: "editCount", hideInSearch: true },
+      { title: "认领人", dataIndex: "claimedBy", hideInSearch: true, renderText: (val) => val || "-" },
       {
         title: "更新时间",
-        dataIndex: "updated_at",
+        dataIndex: "updatedAt",
         hideInSearch: true,
         renderText: (val) => formatDateTime(val),
       },
@@ -428,7 +428,7 @@ export default function TextsList() {
               okButtonProps={{ loading: claimingId === record.id }}
               open={activeConfirm?.type === "claim" && activeConfirm.id === record.id}
               onOpenChange={(open) => {
-                if (record.is_claimed) {
+                if (record.isClaimed) {
                   return;
                 }
                 if (open) {
@@ -448,7 +448,7 @@ export default function TextsList() {
                   setClaimingId(record.id);
                   await apiFetch("/claims", {
                     method: "POST",
-                    body: JSON.stringify({ text_id: record.id }),
+                    body: JSON.stringify({ textId: record.id }),
                   });
                   message.success("认领成功");
                   actionRef.current?.reload();
@@ -460,13 +460,13 @@ export default function TextsList() {
                   setActiveConfirm(null);
                 }
               }}
-              disabled={record.is_claimed}
+              disabled={record.isClaimed}
             >
               <Button
                 type="link"
                 size="small"
                 style={{ paddingInline: 0 }}
-                disabled={record.is_claimed || claimingId === record.id}
+                disabled={record.isClaimed || claimingId === record.id}
                 loading={claimingId === record.id}
               >
                 认领
@@ -477,31 +477,31 @@ export default function TextsList() {
               okText="确认"
               cancelText="取消"
               trigger="click"
-              okButtonProps={{ loading: releasingId === record.claim_id }}
-              open={Boolean(record.claim_id) && activeConfirm?.type === "release" && activeConfirm.id === record.claim_id}
+              okButtonProps={{ loading: releasingId === record.claimId }}
+              open={Boolean(record.claimId) && activeConfirm?.type === "release" && activeConfirm.id === record.claimId}
               onOpenChange={(open) => {
-                if (!record.claim_id) {
+                if (!record.claimId) {
                   return;
                 }
                 if (open) {
-                  setActiveConfirm({ type: "release", id: record.claim_id });
-                } else if (releasingId !== record.claim_id) {
+                  setActiveConfirm({ type: "release", id: record.claimId });
+                } else if (releasingId !== record.claimId) {
                   setActiveConfirm(null);
                 }
               }}
               onCancel={() => {
-                if (releasingId !== record.claim_id) {
+                if (releasingId !== record.claimId) {
                   setActiveConfirm(null);
                 }
               }}
               onConfirm={async () => {
-                if (!record.claim_id) {
+                if (!record.claimId) {
                   return;
                 }
                 const startedAt = Date.now();
                 try {
-                  setReleasingId(record.claim_id);
-                  await apiFetch(`/claims/${record.claim_id}`, { method: "DELETE" });
+                  setReleasingId(record.claimId);
+                  await apiFetch(`/claims/${record.claimId}`, { method: "DELETE" });
                   message.success("释放成功");
                   actionRef.current?.reload();
                 } catch (error) {
@@ -512,14 +512,14 @@ export default function TextsList() {
                   setActiveConfirm(null);
                 }
               }}
-              disabled={!record.claim_id}
+              disabled={!record.claimId}
             >
               <Button
                 type="link"
                 size="small"
                 style={{ paddingInline: 0 }}
-                disabled={!record.claim_id || releasingId === record.claim_id}
-                // loading={releasingId === record.claim_id}
+                disabled={!record.claimId || releasingId === record.claimId}
+                // loading={releasingId === record.claimId}
               >
                 释放
               </Button>
@@ -528,7 +528,7 @@ export default function TextsList() {
               type="link"
               size="small"
               style={{ paddingInline: 0 }}
-              onClick={() => navigateWithState(`/texts/${record.fid}/${record.text_id}/edit`)}
+              onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}/edit`)}
             >
               编辑
             </Button>
@@ -536,7 +536,7 @@ export default function TextsList() {
               type="link"
               size="small"
               style={{ paddingInline: 0 }}
-              onClick={() => navigateWithState(`/texts/${record.fid}/${record.text_id}/changes`)}
+              onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}/changes`)}
             >
               更新记录
             </Button>
@@ -554,17 +554,17 @@ export default function TextsList() {
           3: { text: "已完成" },
         },
       },
-      { title: "原文关键字", dataIndex: "source_keyword", hideInTable: true },
-      { title: "汉化关键字", dataIndex: "translated_keyword", hideInTable: true },
+      { title: "原文关键字", dataIndex: "sourceKeyword", hideInTable: true },
+      { title: "汉化关键字", dataIndex: "translatedKeyword", hideInTable: true },
       {
         title: "更新时间范围",
-        dataIndex: "updated_at",
+        dataIndex: "updatedAt",
         valueType: "dateTimeRange",
         hideInTable: true,
         search: {
           transform: (value) => ({
-            updated_from: value[0],
-            updated_to: value[1],
+            updatedFrom: value[0],
+            updatedTo: value[1],
           }),
         },
       },
@@ -585,8 +585,8 @@ export default function TextsList() {
       claimingId,
       releasingId,
       navigateWithState,
-      parentSearch.source_keyword,
-      parentSearch.translated_keyword,
+      parentSearch.sourceKeyword,
+      parentSearch.translatedKeyword,
     ]
   );
 
@@ -594,36 +594,36 @@ export default function TextsList() {
     () => [
       {
         title: "TextId",
-        dataIndex: "text_id",
+        dataIndex: "textId",
         width: 120,
         render: (_, record) => (
           <Typography.Link
-            copyable={{ text: String(record.text_id) }}
+            copyable={{ text: String(record.textId) }}
             onClick={(event) => {
               const target = event.target as HTMLElement;
               if (target.closest("button.ant-typography-copy")) {
                 return;
               }
               event.preventDefault();
-              navigateWithState(`/texts/${record.fid}/${record.text_id}`);
+              navigateWithState(`/texts/${record.fid}/${record.textId}`);
             }}
           >
-            {record.text_id}
+            {record.textId}
           </Typography.Link>
         ),
       },
       { title: "Part", dataIndex: "part", width: 80 },
       {
         title: "原文",
-        dataIndex: "source_text",
+        dataIndex: "sourceText",
         width: 400,
-        render: (_, record) => renderLongText(record.source_text, parentSearch.source_keyword),
+        render: (_, record) => renderLongText(record.sourceText, parentSearch.sourceKeyword),
       },
       {
         title: "译文",
-        dataIndex: "translated_text",
+        dataIndex: "translatedText",
         width: 400,
-        render: (_, record) => renderLongText(record.translated_text, parentSearch.translated_keyword),
+        render: (_, record) => renderLongText(record.translatedText, parentSearch.translatedKeyword),
       },
       {
         title: "状态",
@@ -636,14 +636,14 @@ export default function TextsList() {
       },
       {
         title: "认领人",
-        dataIndex: "claimed_by",
+        dataIndex: "claimedBy",
         width: 120,
-        renderText: (val: TextItem["claimed_by"]) => val || "-",
+        renderText: (val: TextItem["claimedBy"]) => val || "-",
       },
       {
         title: "更新时间",
-        dataIndex: "updated_at",
-        renderText: (val: TextItem["updated_at"]) => formatDateTime(val),
+        dataIndex: "updatedAt",
+        renderText: (val: TextItem["updatedAt"]) => formatDateTime(val),
       },
       {
         title: "操作",
@@ -659,7 +659,7 @@ export default function TextsList() {
               okButtonProps={{ loading: claimingId === record.id }}
               open={activeConfirm?.type === "claim" && activeConfirm.id === record.id}
               onOpenChange={(open) => {
-                if (record.is_claimed) {
+                if (record.isClaimed) {
                   return;
                 }
                 if (open) {
@@ -679,7 +679,7 @@ export default function TextsList() {
                   setClaimingId(record.id);
                   await apiFetch("/claims", {
                     method: "POST",
-                    body: JSON.stringify({ text_id: record.id }),
+                    body: JSON.stringify({ textId: record.id }),
                   });
                   message.success("认领成功");
                   fetchChildren(record.fid);
@@ -691,13 +691,13 @@ export default function TextsList() {
                   setActiveConfirm(null);
                 }
               }}
-              disabled={record.is_claimed}
+              disabled={record.isClaimed}
             >
               <Button
                 type="link"
                 size="small"
                 style={{ paddingInline: 0 }}
-                disabled={record.is_claimed || claimingId === record.id}
+                disabled={record.isClaimed || claimingId === record.id}
                 loading={claimingId === record.id}
               >
                 认领
@@ -708,31 +708,31 @@ export default function TextsList() {
               okText="确认"
               cancelText="取消"
               trigger="click"
-              okButtonProps={{ loading: releasingId === record.claim_id }}
-              open={Boolean(record.claim_id) && activeConfirm?.type === "release" && activeConfirm.id === record.claim_id}
+              okButtonProps={{ loading: releasingId === record.claimId }}
+              open={Boolean(record.claimId) && activeConfirm?.type === "release" && activeConfirm.id === record.claimId}
               onOpenChange={(open) => {
-                if (!record.claim_id) {
+                if (!record.claimId) {
                   return;
                 }
                 if (open) {
-                  setActiveConfirm({ type: "release", id: record.claim_id });
-                } else if (releasingId !== record.claim_id) {
+                  setActiveConfirm({ type: "release", id: record.claimId });
+                } else if (releasingId !== record.claimId) {
                   setActiveConfirm(null);
                 }
               }}
               onCancel={() => {
-                if (releasingId !== record.claim_id) {
+                if (releasingId !== record.claimId) {
                   setActiveConfirm(null);
                 }
               }}
               onConfirm={async () => {
-                if (!record.claim_id) {
+                if (!record.claimId) {
                   return;
                 }
                 const startedAt = Date.now();
                 try {
-                  setReleasingId(record.claim_id);
-                  await apiFetch(`/claims/${record.claim_id}`, { method: "DELETE" });
+                  setReleasingId(record.claimId);
+                  await apiFetch(`/claims/${record.claimId}`, { method: "DELETE" });
                   message.success("释放成功");
                   fetchChildren(record.fid);
                 } catch (error) {
@@ -743,14 +743,14 @@ export default function TextsList() {
                   setActiveConfirm(null);
                 }
               }}
-              disabled={!record.claim_id}
+              disabled={!record.claimId}
             >
               <Button
                 type="link"
                 size="small"
                 style={{ paddingInline: 0 }}
-                disabled={!record.claim_id || releasingId === record.claim_id}
-                loading={releasingId === record.claim_id}
+                disabled={!record.claimId || releasingId === record.claimId}
+                loading={releasingId === record.claimId}
               >
                 释放
               </Button>
@@ -759,7 +759,7 @@ export default function TextsList() {
               type="link"
               size="small"
               style={{ paddingInline: 0 }}
-              onClick={() => navigateWithState(`/texts/${record.fid}/${record.text_id}/edit`)}
+              onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}/edit`)}
             >
               编辑
             </Button>
@@ -767,7 +767,7 @@ export default function TextsList() {
               type="link"
               size="small"
               style={{ paddingInline: 0 }}
-              onClick={() => navigateWithState(`/texts/${record.fid}/${record.text_id}/changes`)}
+              onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}/changes`)}
             >
               更新记录
             </Button>
@@ -781,8 +781,8 @@ export default function TextsList() {
       releasingId,
       navigateWithState,
       fetchChildren,
-      parentSearch.source_keyword,
-      parentSearch.translated_keyword,
+      parentSearch.sourceKeyword,
+      parentSearch.translatedKeyword,
     ]
   );
 
@@ -918,13 +918,13 @@ export default function TextsList() {
           try {
             const query = new URLSearchParams();
             query.set("page", String(params.current || 1));
-            query.set("page_size", String(params.pageSize || parentPageSize));
+            query.set("pageSize", String(params.pageSize || parentPageSize));
             if (params.fid) query.set("fid", params.fid);
             if (params.status) query.set("status", String(params.status));
-            if (params.source_keyword) query.set("source_keyword", params.source_keyword);
-            if (params.translated_keyword) query.set("translated_keyword", params.translated_keyword);
-            if (params.updated_from) query.set("updated_from", params.updated_from);
-            if (params.updated_to) query.set("updated_to", params.updated_to);
+            if (params.sourceKeyword) query.set("sourceKeyword", params.sourceKeyword);
+            if (params.translatedKeyword) query.set("translatedKeyword", params.translatedKeyword);
+            if (params.updatedFrom) query.set("updatedFrom", params.updatedFrom);
+            if (params.updatedTo) query.set("updatedTo", params.updatedTo);
             if (params.claimer) query.set("claimer", params.claimer);
             if (params.claimed) query.set("claimed", params.claimed);
 

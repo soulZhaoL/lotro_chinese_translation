@@ -76,6 +76,19 @@ def _normalize_cell(value: Any) -> Any:
     return str(value)
 
 
+def _sql_identifier(name: str) -> str:
+    if not name:
+        raise ConfigError("SQL 标识符不能为空")
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _sql_qualified_identifier(name: str) -> str:
+    parts = [item.strip() for item in name.split(".")]
+    if not parts or any(not item for item in parts):
+        raise ConfigError(f"SQL 标识符无效: {name}")
+    return ".".join(_sql_identifier(item) for item in parts)
+
+
 def _sql_literal(value: Any) -> str:
     if value is None:
         return "NULL"
@@ -234,7 +247,9 @@ def _write_insert(
 ) -> None:
     if not rows:
         return
-    handle.write(f"INSERT INTO {table} ({', '.join(columns)}) VALUES\n")
+    quoted_table = _sql_qualified_identifier(table)
+    quoted_columns = ", ".join(_sql_identifier(column) for column in columns)
+    handle.write(f"INSERT INTO {quoted_table} ({quoted_columns}) VALUES\n")
     for index, row in enumerate(rows):
         suffix = ",\n" if index < len(rows) - 1 else ";\n"
         handle.write("(" + ", ".join(row) + ")" + suffix)

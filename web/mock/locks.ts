@@ -11,8 +11,8 @@ export default [
       code: "0000",
       message: "操作成功",
       data: {
-        lock_id: 1,
-        expires_at: "2026-01-30T12:00:00Z",
+        lockId: 1,
+        expiresAt: "2026-01-30T12:00:00Z",
       },
     }),
   },
@@ -25,7 +25,7 @@ export default [
       code: "0000",
       message: "操作成功",
       data: {
-        released_at: "2026-01-30T11:30:00Z",
+        releasedAt: "2026-01-30T11:30:00Z",
       },
     }),
   },

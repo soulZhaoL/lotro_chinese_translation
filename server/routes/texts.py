@@ -16,7 +16,7 @@ def _apply_pagination(page: int, page_size: int) -> int:
     if page < 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page 必须 >= 1")
     if page_size < 1:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_size 必须 >= 1")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 必须 >= 1")
     return (page - 1) * page_size
 
 
@@ -24,28 +24,28 @@ def _apply_pagination(page: int, page_size: int) -> int:
 def list_texts(
     fid: Optional[str] = None,
     status_filter: Optional[int] = Query(default=None, alias="status"),
-    source_keyword: Optional[str] = None,
-    translated_keyword: Optional[str] = None,
-    updated_from: Optional[str] = None,
-    updated_to: Optional[str] = None,
+    sourceKeyword: Optional[str] = None,
+    translatedKeyword: Optional[str] = None,
+    updatedFrom: Optional[str] = None,
+    updatedTo: Optional[str] = None,
     claimer: Optional[str] = None,
     claimed: Optional[bool] = None,
     page: int = 1,
-    page_size: Optional[int] = Query(default=None, alias="page_size"),
+    pageSize: Optional[int] = Query(default=None, alias="pageSize"),
     _: Dict[str, Any] = Depends(require_auth),
 ):
     """获取父级主文本列表（仅 part=1），支持筛选与分页。"""
     return list_parent_texts(
         fid=fid,
         status_filter=status_filter,
-        source_keyword=source_keyword,
-        translated_keyword=translated_keyword,
-        updated_from=updated_from,
-        updated_to=updated_to,
+        sourceKeyword=sourceKeyword,
+        translatedKeyword=translatedKeyword,
+        updatedFrom=updatedFrom,
+        updatedTo=updatedTo,
         claimer=claimer,
         claimed=claimed,
         page=page,
-        page_size=page_size,
+        pageSize=pageSize,
         _=_,
     )
 
@@ -54,14 +54,14 @@ def list_texts(
 def list_parent_texts(
     fid: Optional[str] = None,
     status_filter: Optional[int] = Query(default=None, alias="status"),
-    source_keyword: Optional[str] = None,
-    translated_keyword: Optional[str] = None,
-    updated_from: Optional[str] = None,
-    updated_to: Optional[str] = None,
+    sourceKeyword: Optional[str] = None,
+    translatedKeyword: Optional[str] = None,
+    updatedFrom: Optional[str] = None,
+    updatedTo: Optional[str] = None,
     claimer: Optional[str] = None,
     claimed: Optional[bool] = None,
     page: int = 1,
-    page_size: Optional[int] = Query(default=None, alias="page_size"),
+    pageSize: Optional[int] = Query(default=None, alias="pageSize"),
     _: Dict[str, Any] = Depends(require_auth),
 ):
     """获取父级主文本列表（仅 part=1），支持筛选与分页。"""
@@ -70,9 +70,9 @@ def list_parent_texts(
     default_page_size = pagination["default_page_size"]
     max_page_size = pagination["max_page_size"]
 
-    effective_page_size = page_size if page_size is not None else default_page_size
+    effective_page_size = pageSize if pageSize is not None else default_page_size
     if effective_page_size > max_page_size:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_size 超出最大限制")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 超出最大限制")
 
     offset = _apply_pagination(page, effective_page_size)
 
@@ -89,36 +89,36 @@ def list_parent_texts(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status 必须为 1/2/3")
         conditions.append("tm.status = %s")
         params.append(status_filter)
-    if source_keyword is not None:
+    if sourceKeyword is not None:
         conditions.append(
             """
             EXISTS (
                 SELECT 1
                 FROM text_main tmx
                 WHERE tmx.fid = tm.fid
-                  AND tmx.source_text ILIKE %s
+                  AND tmx."sourceText" ILIKE %s
             )
             """
         )
-        params.append(f"%{source_keyword}%")
-    if translated_keyword is not None:
+        params.append(f"%{sourceKeyword}%")
+    if translatedKeyword is not None:
         conditions.append(
             """
             EXISTS (
                 SELECT 1
                 FROM text_main tmx
                 WHERE tmx.fid = tm.fid
-                  AND tmx.translated_text ILIKE %s
+                  AND tmx."translatedText" ILIKE %s
             )
             """
         )
-        params.append(f"%{translated_keyword}%")
-    if updated_from is not None:
-        conditions.append("tm.updated_at >= %s")
-        params.append(updated_from)
-    if updated_to is not None:
-        conditions.append("tm.updated_at <= %s")
-        params.append(updated_to)
+        params.append(f"%{translatedKeyword}%")
+    if updatedFrom is not None:
+        conditions.append('tm."updatedAt" >= %s')
+        params.append(updatedFrom)
+    if updatedTo is not None:
+        conditions.append('tm."updatedAt" <= %s')
+        params.append(updatedTo)
     if claimer is not None:
         conditions.append("u.username ILIKE %s")
         params.append(f"%{claimer}%")
@@ -137,13 +137,13 @@ def list_parent_texts(
             SELECT COUNT(*) AS total
             FROM text_main tm
             LEFT JOIN LATERAL (
-                SELECT c.id, c.user_id, c.claimed_at
+                SELECT c.id, c."userId", c."claimedAt"
                 FROM text_claims c
-                WHERE c.text_id = tm.id
-                ORDER BY c.claimed_at DESC
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC
                 LIMIT 1
             ) tc ON true
-            LEFT JOIN users u ON u.id = tc.user_id
+            LEFT JOIN users u ON u.id = tc."userId"
             {where_clause}
             """,
             tuple(params),
@@ -155,36 +155,36 @@ def list_parent_texts(
             SELECT
               tm.id,
               tm.fid,
-              tm.text_id,
+              tm."textId" AS "textId",
               tm.part,
               CASE
-                WHEN length(tm.source_text) > %s THEN substring(tm.source_text from 1 for %s) || '...'
-                ELSE tm.source_text
-              END AS source_text,
+                WHEN length(tm."sourceText") > %s THEN substring(tm."sourceText" from 1 for %s) || '...'
+                ELSE tm."sourceText"
+              END AS "sourceText",
               CASE
-                WHEN tm.translated_text IS NOT NULL AND length(tm.translated_text) > %s
-                  THEN substring(tm.translated_text from 1 for %s) || '...'
-                ELSE tm.translated_text
-              END AS translated_text,
+                WHEN tm."translatedText" IS NOT NULL AND length(tm."translatedText") > %s
+                  THEN substring(tm."translatedText" from 1 for %s) || '...'
+                ELSE tm."translatedText"
+              END AS "translatedText",
               tm.status,
-              tm.edit_count,
-              tm.updated_at,
-              tm.created_at,
-              tc.id AS claim_id,
-              u.username AS claimed_by,
-              tc.claimed_at AS claimed_at,
-              CASE WHEN tc.id IS NULL THEN FALSE ELSE TRUE END AS is_claimed
+              tm."editCount" AS "editCount",
+              tm."updatedAt" AS "updatedAt",
+              tm."createdAt" AS "createdAt",
+              tc.id AS "claimId",
+              u.username AS "claimedBy",
+              tc."claimedAt" AS "claimedAt",
+              CASE WHEN tc.id IS NULL THEN FALSE ELSE TRUE END AS "isClaimed"
             FROM text_main tm
             LEFT JOIN LATERAL (
-                SELECT c.id, c.user_id, c.claimed_at
+                SELECT c.id, c."userId", c."claimedAt"
                 FROM text_claims c
-                WHERE c.text_id = tm.id
-                ORDER BY c.claimed_at DESC
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC
                 LIMIT 1
             ) tc ON true
-            LEFT JOIN users u ON u.id = tc.user_id
+            LEFT JOIN users u ON u.id = tc."userId"
             {where_clause}
-            ORDER BY tm.updated_at DESC
+            ORDER BY tm."updatedAt" DESC
             LIMIT %s OFFSET %s
             """,
             tuple([max_text_length, max_text_length, max_text_length, max_text_length] + params + [effective_page_size, offset]),
@@ -196,7 +196,7 @@ def list_parent_texts(
             "items": items,
             "total": total,
             "page": page,
-            "page_size": effective_page_size,
+            "pageSize": effective_page_size,
         }
     )
 
@@ -204,11 +204,11 @@ def list_parent_texts(
 @router.get("/children")
 def list_child_texts(
     fid: str,
-    text_id: Optional[int] = Query(default=None, alias="text_id"),
-    source_keyword: Optional[str] = None,
-    translated_keyword: Optional[str] = None,
+    textId: Optional[int] = Query(default=None, alias="textId"),
+    sourceKeyword: Optional[str] = None,
+    translatedKeyword: Optional[str] = None,
     page: int = 1,
-    page_size: Optional[int] = Query(default=None, alias="page_size"),
+    pageSize: Optional[int] = Query(default=None, alias="pageSize"),
     _: Dict[str, Any] = Depends(require_auth),
 ):
     """获取指定 fid 的子列表（默认排除 part=1），支持筛选与分页。"""
@@ -217,38 +217,38 @@ def list_child_texts(
     default_page_size = pagination["default_page_size"]
     max_page_size = pagination["max_page_size"]
 
-    effective_page_size = page_size if page_size is not None else default_page_size
+    effective_page_size = pageSize if pageSize is not None else default_page_size
     if effective_page_size > max_page_size:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_size 超出最大限制")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 超出最大限制")
 
     offset = _apply_pagination(page, effective_page_size)
 
     params: List[Any] = [fid]
     where_clause = "WHERE tm.fid = %s AND tm.part <> 1"
-    if text_id is not None:
-        where_clause += " AND tm.text_id = %s"
-        params.append(text_id)
-    if source_keyword is not None:
-        where_clause += " AND tm.source_text ILIKE %s"
-        params.append(f"%{source_keyword}%")
-    if translated_keyword is not None:
-        where_clause += " AND tm.translated_text ILIKE %s"
-        params.append(f"%{translated_keyword}%")
+    if textId is not None:
+        where_clause += ' AND tm."textId" = %s'
+        params.append(textId)
+    if sourceKeyword is not None:
+        where_clause += ' AND tm."sourceText" ILIKE %s'
+        params.append(f"%{sourceKeyword}%")
+    if translatedKeyword is not None:
+        where_clause += ' AND tm."translatedText" ILIKE %s'
+        params.append(f"%{translatedKeyword}%")
 
     max_text_length = config["text_list"]["max_text_length"]
 
     with db_cursor() as cursor:
-        if text_id is not None:
+        if textId is not None:
             cursor.execute(
                 """
                 SELECT COUNT(*) AS cnt
                 FROM text_main
-                WHERE fid = %s AND text_id = %s
+                WHERE fid = %s AND "textId" = %s
                 """,
-                (fid, text_id),
+                (fid, textId),
             )
             if cursor.fetchone()["cnt"] > 1:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="text_id 在该 fid 下存在重复数据")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="textId 在该 fid 下存在重复数据")
 
         cursor.execute(
             f"""
@@ -265,34 +265,34 @@ def list_child_texts(
             SELECT
               tm.id,
               tm.fid,
-              tm.text_id,
+              tm."textId" AS "textId",
               tm.part,
               CASE
-                WHEN length(tm.source_text) > %s THEN substring(tm.source_text from 1 for %s) || '...'
-                ELSE tm.source_text
-              END AS source_text,
+                WHEN length(tm."sourceText") > %s THEN substring(tm."sourceText" from 1 for %s) || '...'
+                ELSE tm."sourceText"
+              END AS "sourceText",
               CASE
-                WHEN tm.translated_text IS NOT NULL AND length(tm.translated_text) > %s
-                  THEN substring(tm.translated_text from 1 for %s) || '...'
-                ELSE tm.translated_text
-              END AS translated_text,
+                WHEN tm."translatedText" IS NOT NULL AND length(tm."translatedText") > %s
+                  THEN substring(tm."translatedText" from 1 for %s) || '...'
+                ELSE tm."translatedText"
+              END AS "translatedText",
               tm.status,
-              tm.edit_count,
-              tm.updated_at,
-              tm.created_at,
-              tc.id AS claim_id,
-              u.username AS claimed_by,
-              tc.claimed_at AS claimed_at,
-              CASE WHEN tc.id IS NULL THEN FALSE ELSE TRUE END AS is_claimed
+              tm."editCount" AS "editCount",
+              tm."updatedAt" AS "updatedAt",
+              tm."createdAt" AS "createdAt",
+              tc.id AS "claimId",
+              u.username AS "claimedBy",
+              tc."claimedAt" AS "claimedAt",
+              CASE WHEN tc.id IS NULL THEN FALSE ELSE TRUE END AS "isClaimed"
             FROM text_main tm
             LEFT JOIN LATERAL (
-                SELECT c.id, c.user_id, c.claimed_at
+                SELECT c.id, c."userId", c."claimedAt"
                 FROM text_claims c
-                WHERE c.text_id = tm.id
-                ORDER BY c.claimed_at DESC
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC
                 LIMIT 1
             ) tc ON true
-            LEFT JOIN users u ON u.id = tc.user_id
+            LEFT JOIN users u ON u.id = tc."userId"
             {where_clause}
             ORDER BY tm.part ASC
             LIMIT %s OFFSET %s
@@ -306,7 +306,7 @@ def list_child_texts(
             "items": items,
             "total": total,
             "page": page,
-            "page_size": effective_page_size,
+            "pageSize": effective_page_size,
         }
     )
 
@@ -314,32 +314,42 @@ def list_child_texts(
 @router.get("/by-textid")
 def get_text_by_textid(
     fid: str,
-    text_id: int = Query(..., alias="text_id"),
+    textId: int = Query(..., alias="textId"),
     _: Dict[str, Any] = Depends(require_auth),
 ):
     """根据 fid + textId 获取主文本详情。"""
     with db_cursor() as cursor:
         cursor.execute(
             """
-            SELECT id, fid, text_id, part, source_text, translated_text, status, edit_count, updated_at, created_at
+            SELECT
+              id,
+              fid,
+              "textId" AS "textId",
+              part,
+              "sourceText" AS "sourceText",
+              "translatedText" AS "translatedText",
+              status,
+              "editCount" AS "editCount",
+              "updatedAt" AS "updatedAt",
+              "createdAt" AS "createdAt"
             FROM text_main
-            WHERE fid = %s AND text_id = %s
+            WHERE fid = %s AND "textId" = %s
             """,
-            (fid, text_id),
+            (fid, textId),
         )
         rows = cursor.fetchall()
         if not rows:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")
         if len(rows) > 1:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="text_id 在该 fid 下存在重复数据")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="textId 在该 fid 下存在重复数据")
         text = rows[0]
 
         cursor.execute(
             """
-            SELECT id, user_id, claimed_at
+            SELECT id, "userId" AS "userId", "claimedAt" AS "claimedAt"
             FROM text_claims
-            WHERE text_id = %s
-            ORDER BY claimed_at DESC
+            WHERE "textId" = %s
+            ORDER BY "claimedAt" DESC
             """,
             (text["id"],),
         )
@@ -347,10 +357,15 @@ def get_text_by_textid(
 
         cursor.execute(
             """
-            SELECT id, user_id, locked_at, expires_at, released_at
+            SELECT
+              id,
+              "userId" AS "userId",
+              "lockedAt" AS "lockedAt",
+              "expiresAt" AS "expiresAt",
+              "releasedAt" AS "releasedAt"
             FROM text_locks
-            WHERE text_id = %s
-            ORDER BY locked_at DESC
+            WHERE "textId" = %s
+            ORDER BY "lockedAt" DESC
             """,
             (text["id"],),
         )
@@ -365,17 +380,27 @@ def get_text_by_textid(
     )
 
 
-@router.get("/{text_id}")
-def get_text(text_id: int, _: Dict[str, Any] = Depends(require_auth)):
+@router.get("/{textId}")
+def get_text(textId: int, _: Dict[str, Any] = Depends(require_auth)):
     """获取主文本详情以及认领/锁定信息。"""
     with db_cursor() as cursor:
         cursor.execute(
             """
-            SELECT id, fid, text_id, part, source_text, translated_text, status, edit_count, updated_at, created_at
+            SELECT
+              id,
+              fid,
+              "textId" AS "textId",
+              part,
+              "sourceText" AS "sourceText",
+              "translatedText" AS "translatedText",
+              status,
+              "editCount" AS "editCount",
+              "updatedAt" AS "updatedAt",
+              "createdAt" AS "createdAt"
             FROM text_main
             WHERE id = %s
             """,
-            (text_id,),
+            (textId,),
         )
         text = cursor.fetchone()
         if text is None:
@@ -383,23 +408,28 @@ def get_text(text_id: int, _: Dict[str, Any] = Depends(require_auth)):
 
         cursor.execute(
             """
-            SELECT id, user_id, claimed_at
+            SELECT id, "userId" AS "userId", "claimedAt" AS "claimedAt"
             FROM text_claims
-            WHERE text_id = %s
-            ORDER BY claimed_at DESC
+            WHERE "textId" = %s
+            ORDER BY "claimedAt" DESC
             """,
-            (text_id,),
+            (textId,),
         )
         claims = cursor.fetchall()
 
         cursor.execute(
             """
-            SELECT id, user_id, locked_at, expires_at, released_at
+            SELECT
+              id,
+              "userId" AS "userId",
+              "lockedAt" AS "lockedAt",
+              "expiresAt" AS "expiresAt",
+              "releasedAt" AS "releasedAt"
             FROM text_locks
-            WHERE text_id = %s
-            ORDER BY locked_at DESC
+            WHERE "textId" = %s
+            ORDER BY "lockedAt" DESC
             """,
-            (text_id,),
+            (textId,),
         )
         locks = cursor.fetchall()
 
@@ -413,52 +443,52 @@ def get_text(text_id: int, _: Dict[str, Any] = Depends(require_auth)):
 
 
 class TranslateRequest(BaseModel):
-    translated_text: str
+    translatedText: str
     reason: Optional[str] = None
-    is_completed: Optional[bool] = None
+    isCompleted: Optional[bool] = None
 
 
-@router.put("/{text_id}/translate")
+@router.put("/{textId}/translate")
 def update_translation(
-    text_id: int,
+    textId: int,
     request: TranslateRequest,
     user: Dict[str, Any] = Depends(require_auth),
 ):
     """保存译文并写入变更记录。"""
     with db_cursor() as cursor:
         cursor.execute(
-            "SELECT translated_text FROM text_main WHERE id = %s",
-            (text_id,),
+            'SELECT "translatedText" FROM text_main WHERE id = %s',
+            (textId,),
         )
         row = cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")
 
-        before_text = row["translated_text"] or ""
-        if request.is_completed:
+        beforeText = row["translatedText"] or ""
+        if request.isCompleted:
             cursor.execute(
                 """
                 UPDATE text_main
-                SET translated_text = %s, status = %s, edit_count = edit_count + 1, updated_at = NOW()
+                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "updatedAt" = NOW()
                 WHERE id = %s
                 """,
-                (request.translated_text, 3, text_id),
+                (request.translatedText, 3, textId),
             )
         else:
             cursor.execute(
                 """
                 UPDATE text_main
-                SET translated_text = %s, status = %s, edit_count = edit_count + 1, updated_at = NOW()
+                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "updatedAt" = NOW()
                 WHERE id = %s
                 """,
-                (request.translated_text, 2, text_id),
+                (request.translatedText, 2, textId),
             )
         cursor.execute(
             """
-            INSERT INTO text_changes (text_id, user_id, before_text, after_text, reason)
+            INSERT INTO text_changes ("textId", "userId", "beforeText", "afterText", reason)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (text_id, user["user_id"], before_text, request.translated_text, request.reason),
+            (textId, user["userId"], beforeText, request.translatedText, request.reason),
         )
 
-    return success_response({"id": text_id})
+    return success_response({"id": textId})

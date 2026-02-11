@@ -41,6 +41,12 @@ LOTRO_ENV_PATH=/abs/path/to/.env
 psql "$LOTRO_DATABASE_DSN" -f server/migrations/001_init.sql
 ```
 
+若数据库已存在旧版 snake_case 列，请再执行一次驼峰迁移：
+
+```
+psql "$LOTRO_DATABASE_DSN" -f server/migrations/002_camel_case_columns.sql
+```
+
 ## 启动服务
 
 ### 一键启动（推荐）
@@ -111,11 +117,11 @@ FastAPI 自带文档：
 核心接口补充：
 
 - 查询：GET /texts（支持高级查询参数）
-- 详情：GET /texts/{id}
+- 详情：GET /texts/{textId}
 - 认领：POST /claims
-- 释放认领：DELETE /claims/{id}
-- 保存译文：PUT /texts/{id}/translate
-- 更新记录：GET /changes?text_id=...
+- 释放认领：DELETE /claims/{claimId}
+- 保存译文：PUT /texts/{textId}/translate
+- 更新记录：GET /changes?textId=...
 
 ## 运行测试
 

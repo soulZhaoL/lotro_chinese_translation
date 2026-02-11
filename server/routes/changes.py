@@ -11,21 +11,28 @@ router = APIRouter(prefix="/changes", tags=["changes"])
 
 
 @router.get("")
-def list_changes(text_id: int = Query(...), _: Dict[str, Any] = Depends(require_auth)):
+def list_changes(textId: int = Query(...), _: Dict[str, Any] = Depends(require_auth)):
     """查询指定文本的变更历史。"""
     with db_cursor() as cursor:
-        cursor.execute("SELECT id FROM text_main WHERE id = %s", (text_id,))
+        cursor.execute("SELECT id FROM text_main WHERE id = %s", (textId,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")
 
         cursor.execute(
             """
-            SELECT id, text_id, user_id, before_text, after_text, reason, changed_at
+            SELECT
+              id,
+              "textId" AS "textId",
+              "userId" AS "userId",
+              "beforeText" AS "beforeText",
+              "afterText" AS "afterText",
+              reason,
+              "changedAt" AS "changedAt"
             FROM text_changes
-            WHERE text_id = %s
-            ORDER BY changed_at DESC
+            WHERE "textId" = %s
+            ORDER BY "changedAt" DESC
             """,
-            (text_id,),
+            (textId,),
         )
         items = cursor.fetchall()
 

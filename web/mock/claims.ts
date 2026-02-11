@@ -10,7 +10,7 @@ export default [
       statusCode: 200,
       code: "0000",
       message: "操作成功",
-      data: { claim_id: Math.floor(Math.random() * 10000) + 1 },
+      data: { claimId: Math.floor(Math.random() * 10000) + 1 },
     }),
   },
   {

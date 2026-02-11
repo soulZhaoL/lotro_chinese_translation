@@ -10,12 +10,12 @@ interface TextDetail {
     id: number;
     fid: string;
     part: string;
-    source_text: string | null;
-    translated_text: string | null;
+    sourceText: string | null;
+    translatedText: string | null;
     status: number;
   };
-  claims: Array<{ id: number; user_id: number; claimed_at: string }>;
-  locks: Array<{ id: number; user_id: number; locked_at: string; expires_at: string; released_at: string | null }>;
+  claims: Array<{ id: number; userId: number; claimedAt: string }>;
+  locks: Array<{ id: number; userId: number; lockedAt: string; expiresAt: string; releasedAt: string | null }>;
 }
 
 export default function Translate() {
@@ -31,7 +31,7 @@ export default function Translate() {
     const load = async () => {
       const response = await apiFetch<TextDetail>(`/texts/${textId}`);
       setDetail(response);
-      setTranslated(response.text.translated_text || "");
+      setTranslated(response.text.translatedText || "");
     };
     void load();
   }, [textId]);
@@ -40,11 +40,11 @@ export default function Translate() {
     const lock = async () => {
       try {
         setLocking(true);
-        const response = await apiFetch<{ lock_id: number }>("/locks", {
+        const response = await apiFetch<{ lockId: number }>("/locks", {
           method: "POST",
-          body: JSON.stringify({ text_id: textId }),
+          body: JSON.stringify({ textId: textId }),
         });
-        setLockId(response.lock_id);
+        setLockId(response.lockId);
       } catch (error) {
         message.error(getErrorMessage(error, "锁定失败"));
       } finally {
@@ -86,7 +86,7 @@ export default function Translate() {
       </Button>
       <Divider />
       <Card title="原文" style={{ marginBottom: 16 }}>
-        <Typography.Paragraph>{detail.text.source_text || "-"}</Typography.Paragraph>
+        <Typography.Paragraph>{detail.text.sourceText || "-"}</Typography.Paragraph>
       </Card>
       <Card title="译文">
         <Input.TextArea value={translated} onChange={(event) => setTranslated(event.target.value)} rows={6} />

@@ -11,7 +11,7 @@ interface LoginResponse {
   user: {
     id: number;
     username: string;
-    is_guest: boolean;
+    isGuest: boolean;
   };
   roles: string[];
   permissions: string[];

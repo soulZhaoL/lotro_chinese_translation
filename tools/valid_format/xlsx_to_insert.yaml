@@ -12,29 +12,29 @@ input:
   # Excel 列号（从 1 开始）
   source_columns:
     fid: 1
-    text_id: 2
+    textId: 2
     part: 3
-    source_text: 4
-    translated_text: 5
+    sourceText: 4
+    translatedText: 5
 
 output:
   path: "work_text/text_main_insert.sql"
   table: "text_main"
   columns:
     - fid
-    - text_id
+    - textId
     - part
-    - source_text
-    - translated_text
+    - sourceText
+    - translatedText
     - status
-    - is_claimed
-    - edit_count
+    - isClaimed
+    - editCount
   # 每 20000 行生成一条 INSERT 语句
   chunk_size: 20000
   fixed_values:
     status: 1
-    is_claimed: false
-    edit_count: 0
+    isClaimed: false
+    editCount: 0
 
 behavior:
   # 缺失必填字段时：error=报错中止，skip=跳过该行
@@ -43,5 +43,5 @@ behavior:
   skip_blank_rows: true
   # 允许为 NULL 的输出列
   nullable_columns:
-    - source_text
-    - translated_text
+    - sourceText
+    - translatedText

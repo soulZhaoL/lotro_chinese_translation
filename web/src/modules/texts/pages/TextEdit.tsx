@@ -9,10 +9,10 @@ interface TextDetailResponse {
   text: {
     id: number;
     fid: string;
-    text_id: number;
+    textId: number;
     part: number;
-    source_text: string | null;
-    translated_text: string | null;
+    sourceText: string | null;
+    translatedText: string | null;
     status: number;
   };
 }
@@ -60,10 +60,10 @@ export default function TextEdit() {
     const load = async () => {
       try {
         const response = await apiFetch<TextDetailResponse>(
-          `/texts/by-textid?fid=${encodeURIComponent(fid)}&text_id=${textId}`
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
         );
         setDetail(response);
-        setTranslated(response.text.translated_text || "");
+        setTranslated(response.text.translatedText || "");
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
       }
@@ -81,7 +81,7 @@ export default function TextEdit() {
       setSaving(true);
       await apiFetch(`/texts/${detail.text.id}/translate`, {
         method: "PUT",
-        body: JSON.stringify({ translated_text: translated, reason, is_completed: markCompleted }),
+        body: JSON.stringify({ translatedText: translated, reason, isCompleted: markCompleted }),
       });
       message.success("保存成功");
       navigate("/texts", { state: { refresh: true, listState } });
@@ -99,13 +99,13 @@ export default function TextEdit() {
   return (
     <div>
       <Typography.Paragraph>
-        FID: {detail.text.fid} / TextId: {detail.text.text_id} / Part: {detail.text.part}
+        FID: {detail.text.fid} / TextId: {detail.text.textId} / Part: {detail.text.part}
       </Typography.Paragraph>
       <Row gutter={16}>
         <Col xs={24} sm={24} md={12} lg={12} xl={12} xxl={12} style={{ minWidth: 0 }}>
           <Card title="原文">
             <Input.TextArea
-              value={detail.text.source_text || ""}
+              value={detail.text.sourceText || ""}
               rows={24}
               readOnly
               style={{ width: "100%" }}

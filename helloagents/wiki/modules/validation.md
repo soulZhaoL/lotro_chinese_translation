@@ -6,7 +6,7 @@
 ## 模块概述
 - **职责:** 校验规则定义、错误提示
 - **状态:** 🧪实现中
-- **最后更新:** 2026-02-02
+- **最后更新:** 2026-02-11
 
 ## 规范
 
@@ -22,7 +22,7 @@
 ## API接口
 ### [POST] /validate
 **描述:** 校验翻译文本
-**输入:** text_id, translated_text
+**输入:** textId, translatedText
 **输出:** 通过/错误列表
 
 ## 数据模型
@@ -36,8 +36,8 @@
 
 ## 实施说明
 - 已实现最小校验规则：空文本、花括号占位符数量、%s/%d 占位符数量
-- 新增离线脚本 `tools/xlsx_format_check.py`，用于统计固定格式数量并支持 C/D 列对比（固定格式前缀为 6-10 位数字；支持输出不一致行的附近片段、xlsx 报告与进度输出）
-- 新增离线脚本 `tools/xlsx_token_check.py`，用于统计 `<--DO_NOT_TOUCH!-->` 标记数量并导出不一致行的 xlsx 报告
+- 新增离线脚本 `tools/valid_format/xlsx_format_check.py`，用于统计固定格式数量并支持 C/D 列对比（固定格式前缀为 6-10 位数字；支持输出不一致行的附近片段、xlsx 报告与进度输出）
+- 新增离线脚本 `tools/valid_format/xlsx_token_check.py`，用于统计 `<--DO_NOT_TOUCH!-->` 标记数量并导出不一致行的 xlsx 报告
 
 ## 变更历史
-- （暂无）
+- 2026-02-11：校验接口输入字段统一为 camelCase

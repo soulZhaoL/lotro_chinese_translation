@@ -8,14 +8,16 @@ from server.db import db_cursor
 def _login(client: TestClient, seed_user):
     response = client.post("/auth/login", json={"username": seed_user["username"], "password": seed_user["password"]})
     assert response.status_code == 200
-    return response.json()["token"]
+    payload = response.json()
+    assert payload["code"] == "0000"
+    return payload["data"]["token"]
 
 
 def test_validate_text(seed_user):
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO text_main (fid, text_id, part, source_text, translated_text, status, edit_count)
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
@@ -29,10 +31,10 @@ def test_validate_text(seed_user):
 
     response = client.post(
         "/validate",
-        json={"text_id": text_id, "translated_text": "你好 {name} %s"},
+        json={"textId": text_id, "translatedText": "你好 {name} %s"},
         headers=headers,
     )
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["valid"] is True
     assert data["errors"] == []

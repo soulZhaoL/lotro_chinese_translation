@@ -39,7 +39,7 @@
 - 登录成功信息与用户角色、权限、token
 ```json
 {
-  "user": { "id": 1, "username": "tester", "is_guest": false },
+  "user": { "id": 1, "username": "tester", "isGuest": false },
   "roles": ["translator"],
   "permissions": ["text.read"],
   "token": "..."
@@ -56,7 +56,7 @@
 #### [GET] /texts/parents
 **描述:** 获取父级主文本列表（仅 part=1，支持筛选与分页）
 
-**请求参数:** fid/status(1=新增/2=修改/3=已完成)/source_keyword/translated_keyword/updated_from/updated_to/claimer/claimed/page/page_size
+**请求参数:** fid/status(1=新增/2=修改/3=已完成)/sourceKeyword/translatedKeyword/updatedFrom/updatedTo/claimer/claimed/page/pageSize
 
 **响应:**
 ```json
@@ -65,49 +65,49 @@
     {
       "id": 1,
       "fid": "file_a",
-      "text_id": 10001,
+      "textId": 10001,
       "part": 1,
       "status": 1,
-      "claim_id": 10,
-      "claimed_by": "tester",
-      "claimed_at": "2026-01-30T10:00:00Z",
-      "is_claimed": true
+      "claimId": 10,
+      "claimedBy": "tester",
+      "claimedAt": "2026-01-30T10:00:00Z",
+      "isClaimed": true
     }
   ],
   "total": 1,
   "page": 1,
-  "page_size": 20
+  "pageSize": 20
 }
 ```
 
 #### [GET] /texts/children
 **描述:** 获取指定 fid 的子列表（默认排除 part=1）
 
-**请求参数:** fid（必填）/text_id（可选）/source_keyword（可选）/translated_keyword（可选）/page/page_size
+**请求参数:** fid（必填）/textId（可选）/sourceKeyword（可选）/translatedKeyword（可选）/page/pageSize
 
 **响应:** 同父列表结构，按 part 升序
 
 #### [GET] /texts/by-textid
 **描述:** fid + textId 精确查询
 
-**请求参数:** fid/text_id
+**请求参数:** fid/textId
 
 **响应:**
 ```json
 {
-  "text": { "id": 1, "fid": "file_a", "text_id": 10001, "part": 1 },
+  "text": { "id": 1, "fid": "file_a", "textId": 10001, "part": 1 },
   "claims": [],
   "locks": []
 }
 ```
 
-#### [GET] /texts/{id}
+#### [GET] /texts/{textId}
 **描述:** 获取主文本详情（内部 ID）
 
 **响应:**
 ```json
 {
-  "text": { "id": 1, "fid": "file_a", "text_id": 10001, "part": 1 },
+  "text": { "id": 1, "fid": "file_a", "textId": 10001, "part": 1 },
   "claims": [],
   "locks": []
 }
@@ -118,10 +118,10 @@
 
 **响应:**
 ```json
-{ "claim_id": 1 }
+{ "claimId": 1 }
 ```
 
-#### [DELETE] /claims/{id}
+#### [DELETE] /claims/{claimId}
 **描述:** 释放认领
 
 **响应:**
@@ -134,27 +134,27 @@
 
 **响应:**
 ```json
-{ "lock_id": 1, "expires_at": "2026-01-30T12:00:00Z" }
+{ "lockId": 1, "expiresAt": "2026-01-30T12:00:00Z" }
 ```
 
-#### [DELETE] /locks/{id}
+#### [DELETE] /locks/{lockId}
 **描述:** 释放锁定
 
 **响应:**
 ```json
-{ "released_at": "2026-01-30T11:30:00Z" }
+{ "releasedAt": "2026-01-30T11:30:00Z" }
 ```
 
 ---
 
 ### 变更历史
 
-#### [GET] /changes?text_id=...
+#### [GET] /changes?textId=...
 **描述:** 获取文本变更历史
 
 **响应:**
 ```json
-{ "items": [{ "id": 1, "text_id": 1, "before_text": "...", "after_text": "..." }] }
+{ "items": [{ "id": 1, "textId": 1, "beforeText": "...", "afterText": "..." }] }
 ```
 
 ---
@@ -168,20 +168,20 @@
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | keyword | string | 否 | 兼容关键字（原文/译文模糊匹配） |
-| term_key | string | 否 | 原文模糊匹配 |
-| term_value | string | 否 | 译文模糊匹配 |
+| termKey | string | 否 | 原文模糊匹配 |
+| termValue | string | 否 | 译文模糊匹配 |
 | category | string | 否 | 分类 |
-| is_active | boolean | 否 | 是否启用 |
+| isActive | boolean | 否 | 是否启用 |
 | page | int | 否 | 页码 |
-| page_size | int | 否 | 每页数量 |
+| pageSize | int | 否 | 每页数量 |
 
 **响应:**
 ```json
 {
-  "items": [{ "id": 1, "term_key": "orc", "term_value": "兽人" }],
+  "items": [{ "id": 1, "termKey": "orc", "termValue": "兽人" }],
   "total": 1,
   "page": 1,
-  "page_size": 20
+  "pageSize": 20
 }
 ```
 
@@ -193,7 +193,7 @@
 { "id": 1 }
 ```
 
-#### [PUT] /dictionary/{id}
+#### [PUT] /dictionary/{entryId}
 **描述:** 更新词条
 
 **响应:**
@@ -213,12 +213,12 @@
 { "valid": true, "errors": [] }
 ```
 
-#### [PUT] /texts/{id}/translate
+#### [PUT] /texts/{textId}/translate
 **描述:** 保存译文并写入变更记录
 
 **请求:**
 ```json
-{ "translated_text": "...", "reason": "修正说明", "is_completed": true }
+{ "translatedText": "...", "reason": "修正说明", "isCompleted": true }
 ```
 
 **响应:**

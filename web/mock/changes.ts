@@ -8,7 +8,7 @@ export default [
     url: /\/api\/changes/,
     method: "get",
     response: ({ query }) => {
-      const textId = query?.text_id ? Number(query.text_id) : undefined;
+      const textId = query?.textId ? Number(query.textId) : undefined;
       return {
         success: true,
         statusCode: 200,

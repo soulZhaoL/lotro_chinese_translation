@@ -8,14 +8,16 @@ from server.db import db_cursor
 def _login(client: TestClient, seed_user):
     response = client.post("/auth/login", json={"username": seed_user["username"], "password": seed_user["password"]})
     assert response.status_code == 200
-    return response.json()["token"]
+    payload = response.json()
+    assert payload["code"] == "0000"
+    return payload["data"]["token"]
 
 
 def test_lock_conflict(seed_user):
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO text_main (fid, text_id, part, source_text, translated_text, status, edit_count)
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
@@ -27,8 +29,8 @@ def test_lock_conflict(seed_user):
     token = _login(client, seed_user)
     headers = {"Authorization": f"Bearer {token}"}
 
-    first = client.post("/locks", json={"text_id": text_id}, headers=headers)
+    first = client.post("/locks", json={"textId": text_id}, headers=headers)
     assert first.status_code == 200
 
-    second = client.post("/locks", json={"text_id": text_id}, headers=headers)
+    second = client.post("/locks", json={"textId": text_id}, headers=headers)
     assert second.status_code == 409

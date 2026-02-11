@@ -8,18 +8,18 @@ import { formatDateTime } from "../../../utils/datetime";
 
 interface DictionaryItem {
   id: number;
-  term_key: string;
-  term_value: string;
+  termKey: string;
+  termValue: string;
   category: string | null;
-  is_active: boolean;
-  updated_at: string;
+  isActive: boolean;
+  updatedAt: string;
 }
 
 interface DictionaryResponse {
   items: DictionaryItem[];
   total: number;
   page: number;
-  page_size: number;
+  pageSize: number;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -44,14 +44,14 @@ export default function Dictionary() {
   const [filtering, setFiltering] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const fetchData = async (filters?: { term_key?: string; term_value?: string; category?: string }) => {
+  const fetchData = async (filters?: { termKey?: string; termValue?: string; category?: string }) => {
     setLoading(true);
     try {
       const query = new URLSearchParams();
       query.set("page", "1");
-      query.set("page_size", "50");
-      if (filters?.term_key) query.set("term_key", filters.term_key);
-      if (filters?.term_value) query.set("term_value", filters.term_value);
+      query.set("pageSize", "50");
+      if (filters?.termKey) query.set("termKey", filters.termKey);
+      if (filters?.termValue) query.set("termValue", filters.termValue);
       if (filters?.category) {
         query.set("category", filters.category);
       }
@@ -118,24 +118,24 @@ export default function Dictionary() {
   };
 
   const columns: ColumnsType<DictionaryItem> = [
-    { title: "原文 key", dataIndex: "term_key" },
-    { title: "译文 value", dataIndex: "term_value" },
+    { title: "原文 key", dataIndex: "termKey" },
+    { title: "译文 value", dataIndex: "termValue" },
     {
       title: "分类",
       dataIndex: "category",
       render: (value) => (value ? CATEGORY_LABELS[value] || value : "-"),
     },
-    { title: "更新时间", dataIndex: "updated_at", render: (val) => formatDateTime(val) },
+    { title: "更新时间", dataIndex: "updatedAt", render: (val) => formatDateTime(val) },
   ];
 
   return (
     <div>
       <Typography.Title level={4}>词典管理</Typography.Title>
       <Form form={filterForm} layout="inline" style={{ marginBottom: 16 }}>
-        <Form.Item name="term_key" label="原文">
+        <Form.Item name="termKey" label="原文">
           <Input placeholder="原文关键字" />
         </Form.Item>
-        <Form.Item name="term_value" label="译文">
+        <Form.Item name="termValue" label="译文">
           <Input placeholder="译文关键字" />
         </Form.Item>
         <Form.Item name="category" label="分类">
@@ -168,10 +168,10 @@ export default function Dictionary() {
         destroyOnClose
       >
         <Form form={createForm} layout="vertical" preserve={false}>
-          <Form.Item name="term_key" label="原文" rules={[{ required: true }]}>
+          <Form.Item name="termKey" label="原文" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="term_value" label="译文" rules={[{ required: true }]}>
+          <Form.Item name="termValue" label="译文" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
           <Form.Item name="category" label="分类">

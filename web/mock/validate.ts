@@ -6,7 +6,7 @@ export default [
     url: "/api/validate",
     method: "post",
     response: ({ body }) => {
-      const text = (body?.translated_text || "") as string;
+      const text = (body?.translatedText || "") as string;
       const errors = [] as string[];
       if (!text.trim()) {
         errors.push("译文不能为空");

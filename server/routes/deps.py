@@ -16,12 +16,12 @@ def require_auth(authorization: str = Header(..., alias="Authorization")) -> Dic
     except auth_service.AuthError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
-    user_id = payload.get("sub")
-    if not isinstance(user_id, int):
+    userId = payload.get("sub")
+    if not isinstance(userId, int):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="token 无效")
 
-    user = auth_service.get_user_by_id(user_id)
+    user = auth_service.get_user_by_id(userId)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
 
-    return {"user_id": user_id, "username": user["username"]}
+    return {"userId": userId, "username": user["username"]}

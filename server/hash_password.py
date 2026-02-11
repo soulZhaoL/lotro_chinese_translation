@@ -43,15 +43,15 @@ def main() -> int:
         return 1
 
     print("hash_algorithm:", algorithm)
-    print("password_salt:", salt_hex)
-    print("password_hash:", password_hash)
+    print("passwordSalt:", salt_hex)
+    print("passwordHash:", password_hash)
 
     if args.username:
         db_name = args.db or "<database>"
         print()
         print("SQL 示例(请按实际字段补齐):")
         print(
-            "INSERT INTO users (username, password_hash, password_salt, is_guest, created_at, updated_at)\n"
+            'INSERT INTO users (username, "passwordHash", "passwordSalt", "isGuest", "createdAt", "updatedAt")\n'
             f"VALUES ('{args.username}', '{password_hash}', '{salt_hex}', FALSE, NOW(), NOW());"
         )
 

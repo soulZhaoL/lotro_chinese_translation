@@ -34,29 +34,31 @@
 - 详情/编辑页支持 fid + textId 精确查询
 - 维护模式配置与全局拦截中间件
 - 前端维护页面与维护状态探测
+- 存量数据库字段驼峰迁移脚本（server/migrations/002_camel_case_columns.sql）
 
 ### 变更
-- 文本表状态改为数值枚举（1=新增/2=修改/3=已完成），新增认领状态字段 is_claimed
+- 文本表状态改为数值枚举（1=新增/2=修改/3=已完成），新增认领状态字段 isClaimed
 - 迁移脚本补充字段/表注释并在建表前删除已有表
 - 生成前10000条文本插入SQL（text_main）
 - 新增 xlsx 批量 INSERT 生成脚本（支持行范围与分块）
-- text_main.edit_count 默认值调整为 0
+- text_main.editCount 默认值调整为 0
 - 移除迁移脚本中的外键约束（避免操作阻碍）
 - 配置文件路径固定为 `config/lotro.yaml`，不再依赖 LOTRO_CONFIG_PATH
 - xlsx 导入脚本将空字符串视为 NULL（可选字段），缺失必填列时输出行号
 - xlsx 导入脚本支持跳过空行（避免无效空白触发缺失错误）
-- 允许 source_text 为空，并同步导入配置与前端展示兜底
+- 允许 sourceText 为空，并同步导入配置与前端展示兜底
 - xlsx 导入脚本支持命令行 row-range 覆盖配置范围
 - 前端布局调整为顶部导航 + 左侧二级
 - 前端 Mock 依赖升级至 vite-plugin-mock 3.x
 - 前端构建工具升级至 Vite 7（修复 esbuild 风险）
 - 主文本列表列宽调整（原文/译文扩大，操作列缩小）
 - 长文本预览由 Tooltip 改为 Popover（限高滚动）
-- text_main 新增 text_id，part 调整为顺序编号并新增索引，移除 fid+part 唯一约束
-- xlsx 导入配置新增 text_id 列映射
+- text_main 新增 textId，part 调整为顺序编号并新增索引，移除 fid+part 唯一约束
+- xlsx 导入配置新增 textId 列映射
+- 数据库列、后端接口参数/响应、前端与 Mock 字段统一为 camelCase
 
 ### 修复
-- 数据模型文档补齐 text_locks.released_at 字段
+- 数据模型文档补齐 text_locks.releasedAt 字段
 
 ## [0.1.0] - 2026-01-30
 

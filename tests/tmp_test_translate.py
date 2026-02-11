@@ -8,14 +8,16 @@ from server.db import db_cursor
 def _login(client: TestClient, seed_user):
     response = client.post("/auth/login", json={"username": seed_user["username"], "password": seed_user["password"]})
     assert response.status_code == 200
-    return response.json()["token"]
+    payload = response.json()
+    assert payload["code"] == "0000"
+    return payload["data"]["token"]
 
 
 def test_translate_update(seed_user):
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO text_main (fid, text_id, part, source_text, translated_text, status, edit_count)
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
@@ -29,16 +31,16 @@ def test_translate_update(seed_user):
 
     response = client.put(
         f"/texts/{text_id}/translate",
-        json={"translated_text": "新的翻译", "reason": "修正"},
+        json={"translatedText": "新的翻译", "reason": "修正"},
         headers=headers,
     )
     assert response.status_code == 200
 
     with db_cursor() as cursor:
-        cursor.execute("SELECT translated_text, edit_count FROM text_main WHERE id = %s", (text_id,))
+        cursor.execute('SELECT "translatedText", "editCount" FROM text_main WHERE id = %s', (text_id,))
         row = cursor.fetchone()
-        assert row["translated_text"] == "新的翻译"
-        assert row["edit_count"] == 2
+        assert row["translatedText"] == "新的翻译"
+        assert row["editCount"] == 2
 
-        cursor.execute("SELECT COUNT(*) AS total FROM text_changes WHERE text_id = %s", (text_id,))
+        cursor.execute('SELECT COUNT(*) AS total FROM text_changes WHERE "textId" = %s', (text_id,))
         assert cursor.fetchone()["total"] == 1

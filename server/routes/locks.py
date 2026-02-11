@@ -14,7 +14,7 @@ router = APIRouter(prefix="/locks", tags=["locks"])
 
 
 class LockRequest(BaseModel):
-    text_id: int
+    textId: int
 
 
 def _utc_now() -> datetime:
@@ -28,67 +28,67 @@ def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_aut
     lock_ttl = config["locks"]["default_ttl_seconds"]
 
     with db_cursor() as cursor:
-        cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.text_id,))
+        cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.textId,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")
 
         cursor.execute(
             """
-            SELECT id, user_id, expires_at
+            SELECT id, "userId", "expiresAt"
             FROM text_locks
-            WHERE text_id = %s AND released_at IS NULL
+            WHERE "textId" = %s AND "releasedAt" IS NULL
             """,
-            (request.text_id,),
+            (request.textId,),
         )
         active = cursor.fetchone()
         now = _utc_now()
 
         if active is not None:
-            if active["expires_at"] > now:
+            if active["expiresAt"] > now:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="文本已被锁定")
             cursor.execute(
-                "UPDATE text_locks SET released_at = %s WHERE id = %s",
+                'UPDATE text_locks SET "releasedAt" = %s WHERE id = %s',
                 (now, active["id"]),
             )
 
-        expires_at = now + timedelta(seconds=lock_ttl)
+        expiresAt = now + timedelta(seconds=lock_ttl)
         cursor.execute(
             """
-            INSERT INTO text_locks (text_id, user_id, locked_at, expires_at, released_at)
+            INSERT INTO text_locks ("textId", "userId", "lockedAt", "expiresAt", "releasedAt")
             VALUES (%s, %s, %s, %s, NULL)
             RETURNING id
             """,
-            (request.text_id, user["user_id"], now, expires_at),
+            (request.textId, user["userId"], now, expiresAt),
         )
-        lock_id = cursor.fetchone()["id"]
+        lockId = cursor.fetchone()["id"]
 
-    return success_response({"lock_id": lock_id, "expires_at": expires_at})
+    return success_response({"lockId": lockId, "expiresAt": expiresAt})
 
 
-@router.delete("/{lock_id}")
-def release_lock(lock_id: int, user: Dict[str, Any] = Depends(require_auth)):
+@router.delete("/{lockId}")
+def release_lock(lockId: int, user: Dict[str, Any] = Depends(require_auth)):
     """释放锁定，仅允许锁定者操作。"""
     now = _utc_now()
     with db_cursor() as cursor:
         cursor.execute(
             """
-            SELECT id, user_id, released_at
+            SELECT id, "userId", "releasedAt"
             FROM text_locks
             WHERE id = %s
             """,
-            (lock_id,),
+            (lockId,),
         )
         lock = cursor.fetchone()
         if lock is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="锁定不存在")
-        if lock["user_id"] != user["user_id"]:
+        if lock["userId"] != user["userId"]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权释放锁定")
-        if lock["released_at"] is not None:
+        if lock["releasedAt"] is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="锁定已释放")
 
         cursor.execute(
-            "UPDATE text_locks SET released_at = %s WHERE id = %s",
-            (now, lock_id),
+            'UPDATE text_locks SET "releasedAt" = %s WHERE id = %s',
+            (now, lockId),
         )
 
-    return success_response({"released_at": now})
+    return success_response({"releasedAt": now})

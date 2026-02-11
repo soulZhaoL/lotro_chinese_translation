@@ -18,7 +18,7 @@ export default [
           items,
           total: items.length,
           page: Number(query?.page || 1),
-          page_size: Number(query?.page_size || items.length),
+          pageSize: Number(query?.pageSize || items.length),
         },
       };
     },

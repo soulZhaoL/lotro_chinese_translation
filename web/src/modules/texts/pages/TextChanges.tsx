@@ -9,12 +9,12 @@ import { formatDateTime } from "../../../utils/datetime";
 
 interface ChangeItem {
   id: number;
-  text_id: number;
-  user_id: number;
-  before_text: string;
-  after_text: string;
+  textId: number;
+  userId: number;
+  beforeText: string;
+  afterText: string;
   reason: string | null;
-  changed_at: string;
+  changedAt: string;
 }
 
 interface ChangesResponse {
@@ -39,9 +39,9 @@ export default function TextChanges() {
       setLoading(true);
       try {
         const detail = await apiFetch<TextDetailResponse>(
-          `/texts/by-textid?fid=${encodeURIComponent(fid)}&text_id=${textId}`
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
         );
-        const response = await apiFetch<ChangesResponse>(`/changes?text_id=${detail.text.id}`);
+        const response = await apiFetch<ChangesResponse>(`/changes?textId=${detail.text.id}`);
         setData(response.items);
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
@@ -55,8 +55,8 @@ export default function TextChanges() {
   }, [fid, textId]);
 
   const columns: ColumnsType<ChangeItem> = [
-    { title: "时间", dataIndex: "changed_at", render: (val) => formatDateTime(val) },
-    { title: "用户", dataIndex: "user_id" },
+    { title: "时间", dataIndex: "changedAt", render: (val) => formatDateTime(val) },
+    { title: "用户", dataIndex: "userId" },
     { title: "原因", dataIndex: "reason" },
   ];
 
