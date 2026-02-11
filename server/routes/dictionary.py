@@ -94,11 +94,11 @@ def list_dictionary(
               "termValue" AS "termValue",
               category,
               "isActive" AS "isActive",
-              "createdAt" AS "createdAt",
-              "updatedAt" AS "updatedAt"
+              "crtTime" AS "crtTime",
+              "uptTime" AS "uptTime"
             FROM dictionary_entries
             """
-            + f" {where_clause} ORDER BY \"updatedAt\" DESC LIMIT %s OFFSET %s",
+            + f" {where_clause} ORDER BY \"uptTime\" DESC LIMIT %s OFFSET %s",
             tuple(params + [effective_page_size, offset]),
         )
         items = cursor.fetchall()
@@ -119,7 +119,7 @@ def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depe
     with db_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO dictionary_entries ("termKey", "termValue", category, "isActive", "createdAt", "updatedAt")
+            INSERT INTO dictionary_entries ("termKey", "termValue", category, "isActive", "crtTime", "uptTime")
             VALUES (%s, %s, %s, TRUE, NOW(), NOW())
             RETURNING id
             """,
@@ -141,7 +141,7 @@ def update_dictionary(entryId: int, request: DictionaryUpdateRequest, _: Dict[st
         cursor.execute(
             """
             UPDATE dictionary_entries
-            SET "termKey" = %s, "termValue" = %s, category = %s, "isActive" = %s, "updatedAt" = NOW()
+            SET "termKey" = %s, "termValue" = %s, category = %s, "isActive" = %s, "uptTime" = NOW()
             WHERE id = %s
             """,
             (request.termKey, request.termValue, request.category, request.isActive, entryId),

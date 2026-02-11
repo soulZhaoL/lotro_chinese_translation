@@ -35,6 +35,7 @@
 - 维护模式配置与全局拦截中间件
 - 前端维护页面与维护状态探测
 - 存量数据库字段驼峰迁移脚本（server/migrations/002_camel_case_columns.sql）
+- 时间字段专项迁移脚本（server/migrations/003_rename_time_columns_to_upt_crt.sql）
 
 ### 变更
 - 文本表状态改为数值枚举（1=新增/2=修改/3=已完成），新增认领状态字段 isClaimed
@@ -56,6 +57,7 @@
 - text_main 新增 textId，part 调整为顺序编号并新增索引，移除 fid+part 唯一约束
 - xlsx 导入配置新增 textId 列映射
 - 数据库列、后端接口参数/响应、前端与 Mock 字段统一为 camelCase
+- 时间字段由 `createdAt`/`updatedAt` 统一为 `crtTime`/`uptTime`，并同步初始化索引命名
 
 ### 修复
 - 数据模型文档补齐 text_locks.releasedAt 字段

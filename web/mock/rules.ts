@@ -11,8 +11,8 @@ type TextItem = {
   translatedText: string | null;
   status: number;
   editCount: number;
-  updatedAt: string;
-  createdAt: string;
+  uptTime: string;
+  crtTime: string;
   claimId: number | null;
   claimedBy: string | null;
   claimedAt: string | null;
@@ -38,8 +38,8 @@ function createTextItem(index: number, seed: string): TextItem {
   const base = hash(`${seed}-${index}`);
   const status = statuses[base % statuses.length];
   const isClaimed = base % 2 === 0;
-  const updatedAt = new Date(Date.now() - (base % 3600) * 1000);
-  const createdAt = new Date(updatedAt.getTime() - 3600 * 1000);
+  const uptTime = new Date(Date.now() - (base % 3600) * 1000);
+  const crtTime = new Date(uptTime.getTime() - 3600 * 1000);
 
   return {
     id: 1000 + index,
@@ -50,11 +50,11 @@ function createTextItem(index: number, seed: string): TextItem {
     translatedText: status === 3 ? `78110146::::::[匕首[E]]|||141983240::::::[武器光环[e]]|||9224878::::::[标枪[E]]|||5925762::::::[长矛[E]]|||216547474::::::[单手锤[v]]|||94305316::::::[盾牌[E]]|||243436740::::::[长戟[E]]|||57451442::::::[双手棍棒[E]]|||22146::::::[符文石[E]]|||195175125::::::[项链[E]]|||123899485::::::[长柄武器[E]]|||98231988::::::[单手剑[v]]|||128273636::::::[守望者盾[e]]|||115009204::::::[双手剑[E]]|||32111027::::::[战斗护拳[ps]]|||157982151::::::[弩[E]]|||216547490::::::[双手锤[E]]|||175544643::::::[誓缚武备[ps]]|||193564679::::::[耳环[v]]|||131727580::::::[工匠工具[E]]|||111398483::::::[外观[E]]|||56440725::::::[单手钉锤[v]]|||3524837::::::[单手斧[v]]|||208408648::::::[双手法器[E]]|||208408696::::::[单手法器[v]]|||74210020::::::[战马物品[e]]|||114993142::::::[法杖[E]]|||57489301::::::[双手钉锤[E]]|||4863355::::::[斗篷[e]]|||4860067::::::[职业物品[e]]|||232552930::::::[重甲[E]]|||76069157::::::[挂饰[E]]|||194985972::::::[乐器[e]]|||364615::::::[戒指[E]]|||18791::::::[弓[E]]|||248530164::::::[重盾[e]]|||260947378::::::[轻甲[E]]|||3590373::::::[双手斧[E]]|||142198356::::::[臂环[v]]|||206260578::::::[中甲[E]]|||56402866::::::[单手棍棒[v]]|||95393502::::::[投掷武器[E]]` : null,
     status,
     editCount: status === 3 ? 2 : 0,
-    updatedAt: toIso(updatedAt),
-    createdAt: toIso(createdAt),
+    uptTime: toIso(uptTime),
+    crtTime: toIso(crtTime),
     claimId: isClaimed ? 2000 + index : null,
     claimedBy: isClaimed ? "tester" : null,
-    claimedAt: isClaimed ? toIso(new Date(updatedAt.getTime() - 300 * 1000)) : null,
+    claimedAt: isClaimed ? toIso(new Date(uptTime.getTime() - 300 * 1000)) : null,
     isClaimed,
   };
 }
@@ -64,13 +64,13 @@ function filterByDateRange(items: TextItem[], from?: string, to?: string): TextI
   if (from) {
     const fromTs = new Date(from).getTime();
     if (!Number.isNaN(fromTs)) {
-      result = result.filter((item) => new Date(item.updatedAt).getTime() >= fromTs);
+      result = result.filter((item) => new Date(item.uptTime).getTime() >= fromTs);
     }
   }
   if (to) {
     const toTs = new Date(to).getTime();
     if (!Number.isNaN(toTs)) {
-      result = result.filter((item) => new Date(item.updatedAt).getTime() <= toTs);
+      result = result.filter((item) => new Date(item.uptTime).getTime() <= toTs);
     }
   }
   return result;
@@ -141,8 +141,8 @@ export function generateDictionary(query: Query) {
     termValue: `译文_${i}`,
     category: i % 2 === 0 ? "race" : "place",
     isActive: i % 3 !== 0,
-    createdAt: toIso(new Date(Date.now() - i * 60000)),
-    updatedAt: toIso(new Date(Date.now() - i * 30000)),
+    crtTime: toIso(new Date(Date.now() - i * 60000)),
+    uptTime: toIso(new Date(Date.now() - i * 30000)),
   }));
 
   if (query.keyword) {

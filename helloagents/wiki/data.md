@@ -15,8 +15,8 @@
 | passwordHash | varchar | 加盐 MD5 后的密码 |
 | passwordSalt | varchar | 盐值 |
 | isGuest | boolean | 是否游客 |
-| createdAt | timestamp | 创建时间 |
-| updatedAt | timestamp | 更新时间 |
+| crtTime | timestamp | 创建时间 |
+| uptTime | timestamp | 更新时间 |
 
 ### roles
 | 字段 | 类型 | 说明 |
@@ -60,13 +60,13 @@
 | status | smallint | 状态（1=新增/2=修改/3=已完成） |
 | isClaimed | boolean | 是否已认领（未认领/已认领） |
 | editCount | int | 变更次数（默认0） |
-| updatedAt | timestamp | 最近更新时间 |
-| createdAt | timestamp | 创建时间 |
+| uptTime | timestamp | 最近更新时间 |
+| crtTime | timestamp | 创建时间 |
 
 #### 索引与性能
 - 查询索引: fid, (fid, part), textId, (fid, textId)
 - 部分索引: (fid) WHERE part=1
-- 筛选索引: status, updatedAt
+- 筛选索引: status, uptTime
 - 关键词检索: sourceText/translatedText 使用 GIN + pg_trgm
 
 ### text_claims
@@ -110,5 +110,5 @@
 | termValue | varchar | 词条 value（用于译文高亮） |
 | category | varchar | 分类 |
 | isActive | boolean | 是否启用 |
-| createdAt | timestamp | 创建时间 |
-| updatedAt | timestamp | 更新时间 |
+| crtTime | timestamp | 创建时间 |
+| uptTime | timestamp | 更新时间 |

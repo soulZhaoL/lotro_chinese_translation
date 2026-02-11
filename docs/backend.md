@@ -41,10 +41,17 @@ LOTRO_ENV_PATH=/abs/path/to/.env
 psql "$LOTRO_DATABASE_DSN" -f server/migrations/001_init.sql
 ```
 
-若数据库已存在旧版 snake_case 列，请再执行一次驼峰迁移：
+若数据库已存在旧版 snake_case 列，请按顺序执行存量迁移：
 
 ```
 psql "$LOTRO_DATABASE_DSN" -f server/migrations/002_camel_case_columns.sql
+psql "$LOTRO_DATABASE_DSN" -f server/migrations/003_rename_time_columns_to_upt_crt.sql
+```
+
+若数据库已是 camelCase（`createdAt`/`updatedAt`）但尚未切换为 `crtTime`/`uptTime`，只需执行：
+
+```
+psql "$LOTRO_DATABASE_DSN" -f server/migrations/003_rename_time_columns_to_upt_crt.sql
 ```
 
 ## 启动服务

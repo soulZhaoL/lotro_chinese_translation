@@ -114,10 +114,10 @@ def list_parent_texts(
         )
         params.append(f"%{translatedKeyword}%")
     if updatedFrom is not None:
-        conditions.append('tm."updatedAt" >= %s')
+        conditions.append('tm."uptTime" >= %s')
         params.append(updatedFrom)
     if updatedTo is not None:
-        conditions.append('tm."updatedAt" <= %s')
+        conditions.append('tm."uptTime" <= %s')
         params.append(updatedTo)
     if claimer is not None:
         conditions.append("u.username ILIKE %s")
@@ -168,8 +168,8 @@ def list_parent_texts(
               END AS "translatedText",
               tm.status,
               tm."editCount" AS "editCount",
-              tm."updatedAt" AS "updatedAt",
-              tm."createdAt" AS "createdAt",
+              tm."uptTime" AS "uptTime",
+              tm."crtTime" AS "crtTime",
               tc.id AS "claimId",
               u.username AS "claimedBy",
               tc."claimedAt" AS "claimedAt",
@@ -184,7 +184,7 @@ def list_parent_texts(
             ) tc ON true
             LEFT JOIN users u ON u.id = tc."userId"
             {where_clause}
-            ORDER BY tm."updatedAt" DESC
+            ORDER BY tm."uptTime" DESC
             LIMIT %s OFFSET %s
             """,
             tuple([max_text_length, max_text_length, max_text_length, max_text_length] + params + [effective_page_size, offset]),
@@ -278,8 +278,8 @@ def list_child_texts(
               END AS "translatedText",
               tm.status,
               tm."editCount" AS "editCount",
-              tm."updatedAt" AS "updatedAt",
-              tm."createdAt" AS "createdAt",
+              tm."uptTime" AS "uptTime",
+              tm."crtTime" AS "crtTime",
               tc.id AS "claimId",
               u.username AS "claimedBy",
               tc."claimedAt" AS "claimedAt",
@@ -330,8 +330,8 @@ def get_text_by_textid(
               "translatedText" AS "translatedText",
               status,
               "editCount" AS "editCount",
-              "updatedAt" AS "updatedAt",
-              "createdAt" AS "createdAt"
+              "uptTime" AS "uptTime",
+              "crtTime" AS "crtTime"
             FROM text_main
             WHERE fid = %s AND "textId" = %s
             """,
@@ -395,8 +395,8 @@ def get_text(textId: int, _: Dict[str, Any] = Depends(require_auth)):
               "translatedText" AS "translatedText",
               status,
               "editCount" AS "editCount",
-              "updatedAt" AS "updatedAt",
-              "createdAt" AS "createdAt"
+              "uptTime" AS "uptTime",
+              "crtTime" AS "crtTime"
             FROM text_main
             WHERE id = %s
             """,
@@ -469,7 +469,7 @@ def update_translation(
             cursor.execute(
                 """
                 UPDATE text_main
-                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "updatedAt" = NOW()
+                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "uptTime" = NOW()
                 WHERE id = %s
                 """,
                 (request.translatedText, 3, textId),
@@ -478,7 +478,7 @@ def update_translation(
             cursor.execute(
                 """
                 UPDATE text_main
-                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "updatedAt" = NOW()
+                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "uptTime" = NOW()
                 WHERE id = %s
                 """,
                 (request.translatedText, 2, textId),

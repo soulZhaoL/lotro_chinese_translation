@@ -16,8 +16,8 @@ interface TextDetailResponse {
     translatedText: string | null;
     status: number;
     editCount: number;
-    updatedAt: string;
-    createdAt: string;
+    uptTime: string;
+    crtTime: string;
   };
   claims: Array<{ id: number; userId: number; claimedAt: string }>;
   locks: Array<{ id: number; userId: number; lockedAt: string; expiresAt: string; releasedAt: string | null }>;
@@ -66,8 +66,8 @@ export default function TextDetail() {
             {statusMeta[detail.text.status]?.label || "-"}
           </Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="更新时间">{formatDateTime(detail.text.updatedAt)}</Descriptions.Item>
-        <Descriptions.Item label="创建时间">{formatDateTime(detail.text.createdAt)}</Descriptions.Item>
+        <Descriptions.Item label="更新时间">{formatDateTime(detail.text.uptTime)}</Descriptions.Item>
+        <Descriptions.Item label="创建时间">{formatDateTime(detail.text.crtTime)}</Descriptions.Item>
         <Descriptions.Item label="变更次数">{detail.text.editCount}</Descriptions.Item>
       </Descriptions>
 

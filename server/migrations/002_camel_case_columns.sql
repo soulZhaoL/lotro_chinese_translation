@@ -1,4 +1,5 @@
 -- LOTRO 文本汉化系统 - 下划线字段迁移为驼峰字段
+-- 注意：时间字段从 createdAt/updatedAt 到 crtTime/uptTime 的迁移由 003 脚本负责。
 
 DO $$
 BEGIN

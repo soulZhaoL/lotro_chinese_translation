@@ -20,8 +20,8 @@ interface TextItem {
   translatedText: string | null;
   status: number;
   editCount: number;
-  updatedAt: string;
-  createdAt: string;
+  uptTime: string;
+  crtTime: string;
   claimId: number | null;
   claimedBy: string | null;
   claimedAt: string | null;
@@ -410,7 +410,7 @@ export default function TextsList() {
       { title: "认领人", dataIndex: "claimedBy", hideInSearch: true, renderText: (val) => val || "-" },
       {
         title: "更新时间",
-        dataIndex: "updatedAt",
+        dataIndex: "uptTime",
         hideInSearch: true,
         renderText: (val) => formatDateTime(val),
       },
@@ -558,7 +558,7 @@ export default function TextsList() {
       { title: "汉化关键字", dataIndex: "translatedKeyword", hideInTable: true },
       {
         title: "更新时间范围",
-        dataIndex: "updatedAt",
+        dataIndex: "uptTime",
         valueType: "dateTimeRange",
         hideInTable: true,
         search: {
@@ -642,8 +642,8 @@ export default function TextsList() {
       },
       {
         title: "更新时间",
-        dataIndex: "updatedAt",
-        renderText: (val: TextItem["updatedAt"]) => formatDateTime(val),
+        dataIndex: "uptTime",
+        renderText: (val: TextItem["uptTime"]) => formatDateTime(val),
       },
       {
         title: "操作",

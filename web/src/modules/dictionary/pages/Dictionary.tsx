@@ -12,7 +12,7 @@ interface DictionaryItem {
   termValue: string;
   category: string | null;
   isActive: boolean;
-  updatedAt: string;
+  uptTime: string;
 }
 
 interface DictionaryResponse {
@@ -125,7 +125,7 @@ export default function Dictionary() {
       dataIndex: "category",
       render: (value) => (value ? CATEGORY_LABELS[value] || value : "-"),
     },
-    { title: "更新时间", dataIndex: "updatedAt", render: (val) => formatDateTime(val) },
+    { title: "更新时间", dataIndex: "uptTime", render: (val) => formatDateTime(val) },
   ];
 
   return (

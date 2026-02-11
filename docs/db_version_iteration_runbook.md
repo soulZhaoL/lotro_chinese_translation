@@ -124,7 +124,7 @@
 - `status`（初始按规则计算）
 - `isClaimed`（固定 FALSE）
 - `editCount`（初始 0）
-- `updatedAt` / `createdAt`
+- `uptTime` / `crtTime`
 
 ## Step 5：与备份表比对并继承译文
 

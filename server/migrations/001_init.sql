@@ -29,8 +29,8 @@ CREATE TABLE users (
   "passwordHash" VARCHAR(128) NOT NULL,
   "passwordSalt" VARCHAR(64) NOT NULL,
   "isGuest" BOOLEAN NOT NULL DEFAULT FALSE,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+  "crtTime" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "uptTime" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE users IS '用户表';
@@ -39,8 +39,8 @@ COMMENT ON COLUMN users.username IS '用户名';
 COMMENT ON COLUMN users."passwordHash" IS '密码哈希';
 COMMENT ON COLUMN users."passwordSalt" IS '密码盐';
 COMMENT ON COLUMN users."isGuest" IS '是否游客';
-COMMENT ON COLUMN users."createdAt" IS '创建时间';
-COMMENT ON COLUMN users."updatedAt" IS '更新时间';
+COMMENT ON COLUMN users."crtTime" IS '创建时间';
+COMMENT ON COLUMN users."uptTime" IS '更新时间';
 
 -- roles
 CREATE TABLE roles (
@@ -99,8 +99,8 @@ CREATE TABLE text_main (
   status SMALLINT NOT NULL DEFAULT 1,
   "isClaimed" BOOLEAN NOT NULL DEFAULT FALSE,
   "editCount" INT NOT NULL DEFAULT 0,
-  "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "uptTime" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "crtTime" TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_text_main_status CHECK (status IN (1, 2, 3))
 );
 
@@ -114,15 +114,15 @@ COMMENT ON COLUMN text_main."translatedText" IS '译文';
 COMMENT ON COLUMN text_main.status IS '文本状态（1=新增, 2=修改, 3=已完成）';
 COMMENT ON COLUMN text_main."isClaimed" IS '认领状态（false=未认领, true=已认领）';
 COMMENT ON COLUMN text_main."editCount" IS '变更次数';
-COMMENT ON COLUMN text_main."updatedAt" IS '最近更新时间';
-COMMENT ON COLUMN text_main."createdAt" IS '创建时间';
+COMMENT ON COLUMN text_main."uptTime" IS '最近更新时间';
+COMMENT ON COLUMN text_main."crtTime" IS '创建时间';
 CREATE INDEX idx_text_main_fid ON text_main(fid);
 CREATE INDEX idx_text_main_fid_part ON text_main(fid, part);
 CREATE INDEX idx_text_main_text_id ON text_main("textId");
 CREATE INDEX idx_text_main_fid_text_id ON text_main(fid, "textId");
 CREATE INDEX idx_text_main_part1 ON text_main(fid) WHERE part = 1;
 CREATE INDEX idx_text_main_status ON text_main(status);
-CREATE INDEX idx_text_main_updated_at ON text_main("updatedAt" DESC);
+CREATE INDEX idx_text_main_upt_time ON text_main("uptTime" DESC);
 CREATE INDEX idx_text_main_source_trgm ON text_main USING GIN ("sourceText" gin_trgm_ops);
 CREATE INDEX idx_text_main_trans_trgm ON text_main USING GIN ("translatedText" gin_trgm_ops);
 
@@ -192,8 +192,8 @@ CREATE TABLE dictionary_entries (
   "termValue" VARCHAR(128) NOT NULL,
   category VARCHAR(64),
   "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+  "crtTime" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "uptTime" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE dictionary_entries IS '词典条目表';
@@ -202,7 +202,7 @@ COMMENT ON COLUMN dictionary_entries."termKey" IS '词条Key';
 COMMENT ON COLUMN dictionary_entries."termValue" IS '词条Value';
 COMMENT ON COLUMN dictionary_entries.category IS '分类';
 COMMENT ON COLUMN dictionary_entries."isActive" IS '是否启用';
-COMMENT ON COLUMN dictionary_entries."createdAt" IS '创建时间';
-COMMENT ON COLUMN dictionary_entries."updatedAt" IS '更新时间';
+COMMENT ON COLUMN dictionary_entries."crtTime" IS '创建时间';
+COMMENT ON COLUMN dictionary_entries."uptTime" IS '更新时间';
 CREATE INDEX idx_dictionary_key ON dictionary_entries("termKey");
 CREATE INDEX idx_dictionary_value ON dictionary_entries("termValue");

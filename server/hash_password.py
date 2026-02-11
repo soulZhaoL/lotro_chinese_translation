@@ -51,7 +51,7 @@ def main() -> int:
         print()
         print("SQL 示例(请按实际字段补齐):")
         print(
-            'INSERT INTO users (username, "passwordHash", "passwordSalt", "isGuest", "createdAt", "updatedAt")\n'
+            'INSERT INTO users (username, "passwordHash", "passwordSalt", "isGuest", "crtTime", "uptTime")\n'
             f"VALUES ('{args.username}', '{password_hash}', '{salt_hex}', FALSE, NOW(), NOW());"
         )
 
