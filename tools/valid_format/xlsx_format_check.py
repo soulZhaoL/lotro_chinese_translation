@@ -12,7 +12,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import column_index_from_string
 
 
-_ID_PATTERN = r"\d{4,10}"
+_ID_PATTERN = r"\d{2,10}"
 _PATTERN_COLON6 = re.compile(rf"^{_ID_PATTERN}::::::\[.*\]$", re.DOTALL)
 _PATTERN_TRIPLE_COLON_NUM = re.compile(rf"^{_ID_PATTERN}:::\d+:::\[.*\]$", re.DOTALL)
 _PATTERN_TRIPLE_COLON_RANGE = re.compile(

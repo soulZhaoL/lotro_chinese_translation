@@ -107,7 +107,7 @@
 ## Step 3：创建新主表骨架
 
 1. 以 `text_main_bak_u46` 的结构创建 `text_main_next`（含索引）。
-2. 建议新增列（如尚未存在）：`sourceTextHash`。
+2. 必须包含列 `sourceTextHash`（SHA256，允许 NULL）。
 3. 对 `text_main_next` 建唯一约束：`(fid, textId, part)`。
 
 ## Step 4：导入新版本原文到 `text_main_next`
@@ -118,8 +118,8 @@
 - `fid`
 - `textId`
 - `part`
-- `sourceText`
-- `sourceTextHash`
+- `sourceText`（仅存分段 `[]` 内文本）
+- `sourceTextHash`（`SHA256(sourceText)`）
 - `translatedText`（初始 NULL）
 - `status`（初始按规则计算）
 - `isClaimed`（固定 FALSE）
@@ -135,6 +135,14 @@
 1. 备份不存在该键 → `status=1(新增)`。
 2. 备份存在且 `sourceTextHash` 不同 → `status=2(修改)`，不继承译文。
 3. 备份存在且 `sourceTextHash` 相同 → 继承旧 `translatedText/status/editCount`。
+
+**提取规则（来自 DAT 解包）:**
+
+- 允许的 textId 正则：`\d{2,10}`
+- 合法分段格式：
+  - `^\d{2,10}::::::\[.*\]$`
+  - `^\d{2,10}:::\d+:::\[.*\]$`
+  - `^\d{2,10}:::\d+(?:-\d+)+:::\[.*\]$`
 
 **严格禁止**：使用“文本长度相同”作为匹配条件。
 

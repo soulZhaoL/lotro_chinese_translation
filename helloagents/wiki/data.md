@@ -56,6 +56,7 @@
 | textId | bigint | 文本标识 |
 | part | int | 分段顺序 |
 | sourceText | text | 原文（允许为空） |
+| sourceTextHash | varchar | 原文哈希（SHA256） |
 | translatedText | text | 译文 |
 | status | smallint | 状态（1=新增/2=修改/3=已完成） |
 | isClaimed | boolean | 是否已认领（未认领/已认领） |

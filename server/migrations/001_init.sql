@@ -95,6 +95,7 @@ CREATE TABLE text_main (
   "textId" BIGINT NOT NULL,
   part INTEGER NOT NULL,
   "sourceText" TEXT,
+  "sourceTextHash" VARCHAR(64),
   "translatedText" TEXT,
   status SMALLINT NOT NULL DEFAULT 1,
   "isClaimed" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -110,6 +111,7 @@ COMMENT ON COLUMN text_main.fid IS '文件标识';
 COMMENT ON COLUMN text_main."textId" IS '文本标识';
 COMMENT ON COLUMN text_main.part IS '分段顺序';
 COMMENT ON COLUMN text_main."sourceText" IS '原文（允许为空）';
+COMMENT ON COLUMN text_main."sourceTextHash" IS '原文哈希（SHA256）';
 COMMENT ON COLUMN text_main."translatedText" IS '译文';
 COMMENT ON COLUMN text_main.status IS '文本状态（1=新增, 2=修改, 3=已完成）';
 COMMENT ON COLUMN text_main."isClaimed" IS '认领状态（false=未认领, true=已认领）';
