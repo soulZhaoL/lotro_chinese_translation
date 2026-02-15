@@ -1,0 +1,41 @@
+# Segmented xlsx -> text_main INSERT generator config
+
+base_dir: "__PROJECT_ROOT__"
+
+input:
+  path: "work_text/valid.xlsx"
+  sheet: "Sheet1"
+  row_start: 2
+  row_end: "max"
+  columns:
+    fid: "A"
+    splitPart: "B"
+    sourceText: "C"
+    translatedText: "D"
+
+parsing:
+  splitDelimiter: "|||"
+  idPattern: "\\d{2,10}"
+
+output:
+  path: "work_text/text_main_segmented_insert.sql"
+  table: "text_main"
+  chunkSize: 20000
+  overwrite: true
+  columns:
+    fid: "fid"
+    part: "part"
+    textId: "textId"
+    sourceText: "sourceText"
+    sourceTextHash: "sourceTextHash"
+    translatedText: "translatedText"
+    status: "status"
+    isClaimed: "isClaimed"
+
+fixedValues:
+  status: 1
+  isClaimed: false
+
+behavior:
+  skipBlankRows: true
+  rowErrorPolicy: "error"

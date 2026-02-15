@@ -1,0 +1,14 @@
+database:
+  dsnEnv: LOTRO_DATABASE_DSN
+
+createNext:
+  sourceTable: lotro.text_main_bak_u46
+  nextTable: lotro.text_main_next
+  uniqueConstraintName: uq_text_main_next_fid_textid_part
+  uniqueColumns:
+    - fid
+    - textId
+    - part
+  autoIncrement:
+    idColumn: id
+    sequenceName: lotro.text_main_next_id_seq

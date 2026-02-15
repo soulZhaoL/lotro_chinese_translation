@@ -1,0 +1,13 @@
+database:
+  dsnEnv: LOTRO_DATABASE_DSN
+
+hash:
+  tables:
+    - lotro.text_main_bak_u46
+  idColumn: id
+  sourceTextColumn: sourceText
+  hashColumn: sourceTextHash
+  batchSize: 5000
+  updatePolicy: nullOnly
+  nullSourcePolicy: emptyString
+  missingTablePolicy: skip

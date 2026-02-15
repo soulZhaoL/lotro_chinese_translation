@@ -3,8 +3,8 @@
 base_dir: "__PROJECT_ROOT__"
 
 input:
-  path: "work_text/text_work.xlsx"
-  sheet: "sheet1"
+  path: "work_text/valid.xlsx"
+  sheet: "Sheet1"
   # Excel 行号（包含该行），通常第 1 行是表头，数据从第 2 行开始
   row_start: 2
   # 结束行号；可填写整数或 "max"

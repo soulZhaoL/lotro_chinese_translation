@@ -1,0 +1,40 @@
+input:
+  sqlitePath: work_text/Texts_461.db
+  sourceTable: patch_data
+  fidColumn: fid
+  textDataColumn: text_data
+
+parsing:
+  splitDelimiter: "|||"
+  idPattern: '\d{2,10}'
+  invalidSegmentPolicy: error
+  emptyTextDataPolicy: skip
+
+output:
+  sqlPath: work_text/tmp_text_main_next_insert.sql
+  targetTable: text_main_next
+  chunkSize: 20000
+  overwrite: true
+  columns:
+    fid: fid
+    textId: textId
+    part: part
+    sourceText: sourceText
+    sourceTextHash: sourceTextHash
+    translatedText: translatedText
+    status: status
+    isClaimed: isClaimed
+    editCount: editCount
+    uptTime: uptTime
+    crtTime: crtTime
+
+fixedValues:
+  translatedText: null
+  status: 1
+  isClaimed: false
+  editCount: 0
+  uptTimeExpression: NOW()
+  crtTimeExpression: NOW()
+
+stats:
+  progressEveryFidRows: 20000

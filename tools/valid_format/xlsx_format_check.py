@@ -98,9 +98,9 @@ def _iter_row_counts(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="xlsx 固定格式计数脚本")
     parser.add_argument(
-        "--path", default="work_text/text_work.xlsx", help="xlsx 文件路径"
+        "--path", default="work_text/valid.xlsx", help="xlsx 文件路径"
     )
-    parser.add_argument("--sheet", default=None, help="工作表名称，默认使用活动表")
+    parser.add_argument("--sheet", default="Sheet1", help="工作表名称，默认使用活动表")
     parser.add_argument("--column", default="C", help="待解析列（如 C）")
     parser.add_argument(
         "--row-start", type=int, default=2, help="起始行号（从 2 开始,不考虑标题）"
@@ -113,9 +113,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--show-mismatch", action="store_true", help="输出不一致行的附近文本片段"
     )
-    parser.add_argument(
-        "--snippet-len", type=int, default=120, help="片段输出最大长度"
-    )
+    parser.add_argument("--snippet-len", type=int, default=120, help="片段输出最大长度")
     parser.add_argument(
         "--max-items", type=int, default=20, help="每列最多输出的可疑片段数"
     )
@@ -308,6 +306,7 @@ def main() -> None:
 
     if not args.compare_column:
         print("row\tcount\tinvalid")
+
         def _single_task_iter():
             for offset, row_values in enumerate(rows_iter, start=0):
                 row_index = args.row_start + offset
@@ -355,8 +354,6 @@ def main() -> None:
             right_count,
             left_invalid,
             right_invalid,
-            left_contexts,
-            right_contexts,
         ) in executor.map(
             lambda args_tuple: _analyze_compare_row(*args_tuple),
             (
@@ -419,6 +416,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     # 数字::::::[]
-    #  /Users/zhaolei/miniconda3/envs/lotro/bin/python /Users/zhaolei/My/my-python/lotro_chinese_translation/tools/xlsx_format_check.py --compare-column D --row-start 2 --row-end 1000000  --show-mismatch --output-mismatch-xlsx mismatch.xlsx --workers 8 --progress-every 10000 
-    
-    
+    #  python ./tools/valid_format/xlsx_format_check.py --compare-column D --row-start 2 --row-end 1000000  --show-mismatch --output-mismatch-xlsx mismatch.xlsx --workers 8 --progress-every 10000

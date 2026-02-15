@@ -166,7 +166,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--path", default="work_text/text_work.xlsx", help="xlsx 文件路径"
     )
-    parser.add_argument("--sheet", default=None, help="工作表名称，默认使用活动表")
+    parser.add_argument("--sheet", default="Sheet1", help="工作表名称，默认使用活动表")
     parser.add_argument("--column", default="C", help="待解析列（如 C）")
     parser.add_argument(
         "--row-start", type=int, default=2, help="起始行号（从 2 开始,不考虑标题）"
