@@ -19,21 +19,19 @@ def test_release_claim(seed_user):
             """
             INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
             """,
             ("file_a", 1001, 1, "hello", None, 1, 0),
         )
-        text_id = cursor.fetchone()["id"]
+        text_id = cursor.lastrowid
 
         cursor.execute(
             """
             INSERT INTO text_claims ("textId", "userId")
             VALUES (%s, %s)
-            RETURNING id
             """,
             (text_id, seed_user["userId"]),
         )
-        claim_id = cursor.fetchone()["id"]
+        claim_id = cursor.lastrowid
 
     client = TestClient(app)
     token = _login(client, seed_user)

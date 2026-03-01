@@ -1,4 +1,4 @@
-这是一个lotro文本汉化系统。技术架构:python + react+AndD + PostGreSQL
+这是一个lotro文本汉化系统。技术架构:python + react+AndD + MySQL
 
 主文本文件见 work_text/text_work_U46_0_1.xlsx , 未来会存入数据库。
 

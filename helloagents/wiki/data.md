@@ -68,7 +68,7 @@
 - 查询索引: fid, (fid, part), textId, (fid, textId)
 - 部分索引: (fid) WHERE part=1
 - 筛选索引: status, uptTime
-- 关键词检索: sourceText/translatedText 使用 GIN + pg_trgm
+- 关键词检索: sourceText/translatedText 使用 LIKE（按需可升级为 FULLTEXT）
 
 ### text_claims
 | 字段 | 类型 | 说明 |

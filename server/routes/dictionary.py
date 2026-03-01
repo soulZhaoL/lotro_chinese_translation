@@ -60,15 +60,15 @@ def list_dictionary(
     params: List[Any] = []
 
     if keyword is not None:
-        conditions.append('(\"termKey\" ILIKE %s OR \"termValue\" ILIKE %s)')
+        conditions.append('(\"termKey\" LIKE %s OR \"termValue\" LIKE %s)')
         keyword_value = f"%{keyword}%"
         params.append(keyword_value)
         params.append(keyword_value)
     if termKey is not None:
-        conditions.append('"termKey" ILIKE %s')
+        conditions.append('"termKey" LIKE %s')
         params.append(f"%{termKey}%")
     if termValue is not None:
-        conditions.append('"termValue" ILIKE %s')
+        conditions.append('"termValue" LIKE %s')
         params.append(f"%{termValue}%")
     if category is not None:
         conditions.append("category = %s")
@@ -121,11 +121,10 @@ def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depe
             """
             INSERT INTO dictionary_entries ("termKey", "termValue", category, "isActive", "crtTime", "uptTime")
             VALUES (%s, %s, %s, TRUE, NOW(), NOW())
-            RETURNING id
             """,
             (request.termKey, request.termValue, request.category),
         )
-        entry_id = cursor.fetchone()["id"]
+        entry_id = cursor.lastrowid
 
     return success_response({"id": entry_id})
 

@@ -44,3 +44,6 @@ maintenance:
   message: "系统维护中，请稍后再试"
   allow_paths:
     - "/health"
+
+text_import_export:
+  max_upload_rows: 5000

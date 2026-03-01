@@ -35,13 +35,19 @@ def ensure_tables(config: Dict[str, object], request):
     ]
     with db_cursor() as cursor:
         for table in required_tables:
-            cursor.execute("SELECT to_regclass(%s) AS name", (table,))
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE() AND table_name = %s
+                """,
+                (table,),
+            )
             row = cursor.fetchone()
-            if row is None or row["name"] is None:
+            if row is None or row["cnt"] == 0:
                 raise RuntimeError(f"缺少数据表: {table}，请先执行迁移")
-        cursor.execute(
-            "TRUNCATE text_changes, text_locks, text_claims, dictionary_entries, text_main, user_roles, role_permissions, permissions, roles, users RESTART IDENTITY"
-        )
+        for table in required_tables:
+            cursor.execute(f"TRUNCATE TABLE {table}")
     yield
 
 
@@ -67,10 +73,9 @@ def seed_user(config: Dict[str, object]):
             """
             INSERT INTO users (username, "passwordHash", "passwordSalt", "isGuest")
             VALUES (%s, %s, %s, FALSE)
-            RETURNING id
             """,
             ("tester", password_hash, salt_hex),
         )
-        user_id = cursor.fetchone()["id"]
+        user_id = cursor.lastrowid
 
     return {"username": "tester", "password": password, "userId": user_id}

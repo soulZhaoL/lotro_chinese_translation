@@ -1,3 +1,5 @@
+env: test
+
 input:
   sqlitePath: work_text/Texts_461.db
   sourceTable: patch_data

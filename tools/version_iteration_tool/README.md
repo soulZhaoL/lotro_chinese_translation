@@ -17,6 +17,13 @@
 
 所有 Python 脚本都要求 `--config`，不使用硬编码默认配置。
 
+YAML 环境规则（必填）：
+
+- 每个 step 的 YAML 必须显式配置 `env`：`prod` 或 `test`
+- `env=prod` 时强制使用 schema `lotro`
+- `env=test` 时强制使用 schema `lotro_test`
+- 表名可只写 `text_main` 这种短名，也可写 `lotro.* / lotro_test.*`；脚本会按 `env` 统一重写到目标 schema
+
 环境变量加载规则（与后端一致）：
 
 - 若设置 `LOTRO_ENV_PATH`，脚本会加载该路径下的环境文件
@@ -28,7 +35,8 @@ DB 连接规则（与 `server/start_dev.sh` 一致）：
 - Step1/Step2/Step3 会自动建立 SSH 隧道后再连库
 - 隧道参数来自环境变量：`LOTRO_SSH_HOST`、`LOTRO_SSH_USER`、`LOTRO_SSH_PORT`、`LOTRO_TUNNEL_PORT`、`LOTRO_REMOTE_DB_HOST`、`LOTRO_REMOTE_DB_PORT`
 - 若 `LOTRO_TUNNEL_PORT` 已被监听，则复用现有隧道，不重复创建
-- Step5/Step6/Step7 的 `psql` 命令不会自动建隧道，执行前需先手动保持隧道可用
+- Step5/Step6/Step7 推荐用 `run_step5_to_step7.py`，脚本会自动建立（或复用）SSH 隧道
+- 若 DSN 主机为 `127.0.0.1/localhost`，则要求 DSN 端口必须与 `LOTRO_TUNNEL_PORT` 一致，否则直接报错
 
 ## Step1 备份主表
 
@@ -47,9 +55,9 @@ python tools/version_iteration_tool/step3_create_text_main_next.py \
   --config tools/version_iteration_tool/step3_create_text_main_next.yaml
 ```
 
-- 从备份表 `LIKE ... INCLUDING ALL` 创建 `text_main_next`
+- 从备份表 `LIKE` 创建 `text_main_next`
 - 增加唯一约束 `(fid, textId, part)`
-- 强制设置 `id` 自增默认值（`createNext.autoIncrement` 配置的 sequence）
+- 强制设置 `id` 为 `AUTO_INCREMENT`
 - 前置约束：骨干表（原表/备份表）默认已具备 `sourceTextHash`
 
 ## Step3 生成导入 SQL
@@ -71,16 +79,20 @@ python tools/version_iteration_tool/step4_generate_text_main_next_insert.py \
 导入命令：
 
 ```bash
-psql "$LOTRO_DATABASE_DSN" -f work_text/tmp_text_main_next_insert.sql
+mysql --defaults-extra-file=/path/to/mysql.cnf < work_text/tmp_text_main_next_insert.sql
 ```
 
 ## Step4 比对 + 继承译文（Runbook Step5）
 
 ```bash
-psql "$LOTRO_DATABASE_DSN" \
-  -v backup_table=text_main_bak_u46 \
-  -v next_table=text_main_next \
-  -f tools/version_iteration_tool/step5_compare_and_inherit.sql
+python tools/version_iteration_tool/run_step5_to_step7.py \
+  --runtime-env prod \
+  --backup-table text_main_bak_u46 \
+  --next-table text_main_next \
+  --map-table textIdMap_u46_to_u46_1 \
+  --changes-table text_changes \
+  --start-step 5 \
+  --env .env
 ```
 
 该脚本会按 `fid + textId + part` 分类：
@@ -92,11 +104,14 @@ psql "$LOTRO_DATABASE_DSN" \
 ## Step5 生成新老 ID 映射（Runbook Step6）
 
 ```bash
-psql "$LOTRO_DATABASE_DSN" \
-  -v backup_table=text_main_bak_u46 \
-  -v next_table=text_main_next \
-  -v map_table=textIdMap_u46_to_u46_1 \
-  -f tools/version_iteration_tool/step6_create_text_id_map.sql
+python tools/version_iteration_tool/run_step5_to_step7.py \
+  --runtime-env prod \
+  --backup-table text_main_bak_u46 \
+  --next-table text_main_next \
+  --map-table textIdMap_u46_to_u46_1 \
+  --changes-table text_changes \
+  --start-step 6 \
+  --env .env
 ```
 
 - 仅为“哈希相同”的稳定文本建立映射
@@ -106,10 +121,14 @@ psql "$LOTRO_DATABASE_DSN" \
 ## Step6 迁移 text_changes（Runbook Step7）
 
 ```bash
-psql "$LOTRO_DATABASE_DSN" \
-  -v map_table=textIdMap_u46_to_u46_1 \
-  -v changes_table=text_changes \
-  -f tools/version_iteration_tool/step7_migrate_text_changes.sql
+python tools/version_iteration_tool/run_step5_to_step7.py \
+  --runtime-env prod \
+  --backup-table text_main_bak_u46 \
+  --next-table text_main_next \
+  --map-table textIdMap_u46_to_u46_1 \
+  --changes-table text_changes \
+  --start-step 7 \
+  --env .env
 ```
 
 该脚本会执行：
@@ -120,23 +139,30 @@ psql "$LOTRO_DATABASE_DSN" \
 
 ## 一键执行 Step5~Step7（推荐）
 
-为减少 `psql` 参数输入，提供包装脚本：
+统一使用包装脚本：
 
 ```bash
-./tools/version_iteration_tool/run_step5_to_step7.sh \
-  --backup-table lotro.text_main_bak_u46 \
-  --next-table lotro.text_main_next \
-  --map-table lotro.textIdMap_u46_to_u46_1 \
-  --changes-table lotro.text_changes \
+python tools/version_iteration_tool/run_step5_to_step7.py \
+  --runtime-env prod \
+  --backup-table text_main_bak_u46 \
+  --next-table text_main_next \
+  --map-table textIdMap_u46_to_u46_1 \
+  --changes-table text_changes \
   --start-step 5 \
   --env .env
 ```
 
 - 脚本会自动建立（或复用）SSH 隧道，再按顺序执行 Step5/Step6/Step7
-- 所有表名参数必须显式传入，不使用脚本内默认值
+- `--runtime-env` 必填：`prod` => `lotro`，`test` => `lotro_test`
+- 所有表名参数必须显式传入，不使用脚本内默认值；可用短表名，脚本会按 `runtime-env` 补全 schema
 - 如未传 `--env`，则依赖当前 shell 已存在所需环境变量
-- 若本机没有 `psql` 客户端，脚本会自动切换到 Python 执行器（`run_step5_to_step7.py`）
 - `--start-step` 必填：`5`=执行 5/6/7，`6`=只执行 6/7，`7`=只执行 7（用于 Step6 已完成后的重试）
+
+性能说明（80 万级数据）：
+
+- Step5 现在会自动检查并补充 `(fid,textId,part)` 复合索引（仅在缺失时创建），并执行 `ANALYZE TABLE`
+- 若是首次执行 Step5，建索引本身会消耗时间；但后续比对/继承速度会明显提升
+- `run_step5_to_step7.py` 已改为每个 step 独立提交事务，并打印每一步耗时，便于定位慢点
 
 ## 独立工具：历史 hash 回填（一次性）
 

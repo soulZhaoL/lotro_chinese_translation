@@ -3,9 +3,10 @@
 
 fastapi
 uvicorn
-psycopg[binary]
+pymysql
 PyYAML
 pytest
 python-dotenv
 httpx
 openpyxl
+python-multipart

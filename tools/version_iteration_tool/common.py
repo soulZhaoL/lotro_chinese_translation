@@ -8,13 +8,105 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, Tuple
+from urllib.parse import parse_qs, unquote, urlparse
 
+import pymysql
 import yaml
 from dotenv import load_dotenv
+from pymysql.constants import CLIENT
 
 
 class ConfigError(Exception):
     pass
+
+
+def require_runtime_env(value: str, path: str) -> str:
+    if value not in ("prod", "test"):
+        raise ConfigError(f"配置项无效: {path} 仅支持 prod/test")
+    return value
+
+
+def schema_for_runtime_env(runtime_env: str) -> str:
+    validated = require_runtime_env(runtime_env, "env")
+    if validated == "prod":
+        return "lotro"
+    return "lotro_test"
+
+
+def resolve_env_table_ref(table_ref: str, runtime_env: str, path: str) -> str:
+    normalized = require_table_ref(table_ref, path)
+    configured_schema, table_name = split_table_ref(normalized)
+    target_schema = schema_for_runtime_env(runtime_env)
+
+    if configured_schema == "":
+        return f"{target_schema}.{table_name}"
+
+    if configured_schema in ("lotro", "lotro_test"):
+        return f"{target_schema}.{table_name}"
+
+    if configured_schema == target_schema:
+        return normalized
+
+    raise ConfigError(
+        f"{path} schema 不合法: {configured_schema}，仅允许 lotro/lotro_test 或省略 schema"
+    )
+
+
+def parse_mysql_dsn(dsn: str) -> Dict[str, Any]:
+    parsed = urlparse(dsn)
+    if parsed.scheme not in {"mysql", "mysql+pymysql"}:
+        raise ConfigError("数据库 DSN 必须使用 mysql:// 或 mysql+pymysql://")
+    if parsed.username is None or parsed.username == "":
+        raise ConfigError("数据库 DSN 缺少用户名")
+    if parsed.password is None:
+        raise ConfigError("数据库 DSN 缺少密码")
+    if parsed.hostname is None or parsed.hostname == "":
+        raise ConfigError("数据库 DSN 缺少主机名")
+    if parsed.port is None:
+        raise ConfigError("数据库 DSN 缺少端口")
+
+    database_name = parsed.path.lstrip("/")
+    if database_name == "":
+        raise ConfigError("数据库 DSN 缺少数据库名")
+
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    if "charset" not in query or len(query["charset"]) != 1 or query["charset"][0] == "":
+        raise ConfigError("数据库 DSN 缺少 charset 参数")
+
+    return {
+        "host": parsed.hostname,
+        "port": parsed.port,
+        "user": unquote(parsed.username),
+        "password": unquote(parsed.password),
+        "database": database_name,
+        "charset": query["charset"][0],
+    }
+
+
+def connect_mysql_from_dsn(dsn: str):
+    mysql = parse_mysql_dsn(dsn)
+    tunnel_port = os.environ.get("LOTRO_TUNNEL_PORT")
+    if mysql["host"] in ("127.0.0.1", "localhost") and tunnel_port is not None and tunnel_port != "":
+        if not tunnel_port.isdigit():
+            raise RuntimeError(f"LOTRO_TUNNEL_PORT 必须是数字: {tunnel_port}")
+        expected_port = int(tunnel_port)
+        if mysql["port"] != expected_port:
+            raise RuntimeError(
+                "数据库 DSN 端口与隧道端口不一致: "
+                f"dsn={mysql['host']}:{mysql['port']}, LOTRO_TUNNEL_PORT={expected_port}"
+            )
+    return pymysql.connect(
+        host=mysql["host"],
+        port=mysql["port"],
+        user=mysql["user"],
+        password=mysql["password"],
+        database=mysql["database"],
+        charset=mysql["charset"],
+        cursorclass=pymysql.cursors.DictCursor,
+        client_flag=CLIENT.MULTI_STATEMENTS,
+        init_command="SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')",
+        autocommit=False,
+    )
 
 
 def _project_root() -> Path:
@@ -152,61 +244,99 @@ def require_table_ref(value: str, path: str) -> str:
 def split_table_ref(table_ref: str) -> Tuple[str, str]:
     parts = table_ref.split(".")
     if len(parts) == 1:
-        return "public", parts[0]
+        return "", parts[0]
     return parts[0], parts[1]
 
 
 def quote_ident(name: str) -> str:
-    return '"' + name.replace('"', '""') + '"'
+    return "`" + name.replace("`", "``") + "`"
 
 
 def quote_table_ref(table_ref: str) -> str:
     schema, table = split_table_ref(table_ref)
+    if schema == "":
+        return quote_ident(table)
     return f"{quote_ident(schema)}.{quote_ident(table)}"
 
 
 def table_exists(cursor, table_ref: str) -> bool:
     schema, table = split_table_ref(table_ref)
-    cursor.execute(
-        """
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_schema = %s AND table_name = %s
-        ) AS exists
-        """,
-        (schema, table),
-    )
+    if schema == "":
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.tables
+              WHERE table_schema = DATABASE() AND table_name = %s
+            ) AS `exists`
+            """,
+            (table,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.tables
+              WHERE table_schema = %s AND table_name = %s
+            ) AS `exists`
+            """,
+            (schema, table),
+        )
     return bool(cursor.fetchone()["exists"])
 
 
 def column_exists(cursor, table_ref: str, column_name: str) -> bool:
     schema, table = split_table_ref(table_ref)
-    cursor.execute(
-        """
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.columns
-          WHERE table_schema = %s AND table_name = %s AND column_name = %s
-        ) AS exists
-        """,
-        (schema, table, column_name),
-    )
+    if schema == "":
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s
+            ) AS `exists`
+            """,
+            (table, column_name),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = %s AND table_name = %s AND column_name = %s
+            ) AS `exists`
+            """,
+            (schema, table, column_name),
+        )
     return bool(cursor.fetchone()["exists"])
 
 
 def constraint_exists(cursor, table_ref: str, constraint_name: str) -> bool:
     schema, table = split_table_ref(table_ref)
-    cursor.execute(
-        """
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.table_constraints
-          WHERE table_schema = %s AND table_name = %s AND constraint_name = %s
-        ) AS exists
-        """,
-        (schema, table, constraint_name),
-    )
+    if schema == "":
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.table_constraints
+              WHERE table_schema = DATABASE() AND table_name = %s AND constraint_name = %s
+            ) AS `exists`
+            """,
+            (table, constraint_name),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.table_constraints
+              WHERE table_schema = %s AND table_name = %s AND constraint_name = %s
+            ) AS `exists`
+            """,
+            (schema, table, constraint_name),
+        )
     return bool(cursor.fetchone()["exists"])
 
 

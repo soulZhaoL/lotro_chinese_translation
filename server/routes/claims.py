@@ -27,14 +27,12 @@ def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_a
             """
             INSERT INTO text_claims ("textId", "userId")
             VALUES (%s, %s)
-            ON CONFLICT ("textId", "userId") DO NOTHING
-            RETURNING id
+            ON DUPLICATE KEY UPDATE id = id
             """,
             (request.textId, user["userId"]),
         )
-        row = cursor.fetchone()
-
-        if row is None:
+        claim_id = cursor.lastrowid
+        if claim_id == 0:
             cursor.execute(
                 'SELECT id FROM text_claims WHERE "textId" = %s AND "userId" = %s',
                 (request.textId, user["userId"]),
@@ -44,7 +42,7 @@ def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_a
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="认领失败")
             claimId = existing["id"]
         else:
-            claimId = row["id"]
+            claimId = claim_id
 
     return success_response({"claimId": claimId})
 

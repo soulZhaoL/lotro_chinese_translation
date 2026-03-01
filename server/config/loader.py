@@ -8,7 +8,17 @@ import yaml
 from dotenv import load_dotenv
 
 
-_REQUIRED_TOP_LEVEL_KEYS = ("database", "auth", "pagination", "locks", "cors", "http", "text_list", "maintenance")
+_REQUIRED_TOP_LEVEL_KEYS = (
+    "database",
+    "auth",
+    "pagination",
+    "locks",
+    "cors",
+    "http",
+    "text_list",
+    "maintenance",
+    "text_import_export",
+)
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
 
@@ -103,6 +113,7 @@ def load_config() -> Dict[str, Any]:
     http = _require_type(_require_key(data, "http", ""), dict, "http")
     text_list = _require_type(_require_key(data, "text_list", ""), dict, "text_list")
     maintenance = _require_type(_require_key(data, "maintenance", ""), dict, "maintenance")
+    text_import_export = _require_type(_require_key(data, "text_import_export", ""), dict, "text_import_export")
 
     _require_type(_require_key(database, "dsn", "database."), str, "database.dsn")
 
@@ -123,6 +134,11 @@ def load_config() -> Dict[str, Any]:
     _require_type(_require_key(cors, "max_age", "cors."), int, "cors.max_age")
     _require_type(_require_key(http, "gzip_minimum_size", "http."), int, "http.gzip_minimum_size")
     _require_type(_require_key(text_list, "max_text_length", "text_list."), int, "text_list.max_text_length")
+    _require_type(
+        _require_key(text_import_export, "max_upload_rows", "text_import_export."),
+        int,
+        "text_import_export.max_upload_rows",
+    )
 
     maintenance_enabled = _parse_bool(_require_key(maintenance, "enabled", "maintenance."), "maintenance.enabled")
     maintenance_message = _require_type(_require_key(maintenance, "message", "maintenance."), str, "maintenance.message")

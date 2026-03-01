@@ -5,20 +5,19 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
-from psycopg import connect
-from psycopg.rows import dict_row
-
 from common import (
     ConfigError,
     column_exists,
+    connect_mysql_from_dsn,
     constraint_exists,
     load_env_file,
     load_yaml_config,
     quote_ident,
     quote_table_ref,
     require_identifier,
+    require_runtime_env,
     require_key,
-    require_table_ref,
+    resolve_env_table_ref,
     require_type,
     start_ssh_tunnel_from_env,
     table_exists,
@@ -26,18 +25,30 @@ from common import (
 
 
 def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    runtime_env = require_runtime_env(
+        require_type(require_key(config, "env", ""), str, "env"),
+        "env",
+    )
     database = require_type(require_key(config, "database", ""), dict, "database")
     create_cfg = require_type(require_key(config, "createNext", ""), dict, "createNext")
 
     dsn_env = require_type(require_key(database, "dsnEnv", "database."), str, "database.dsnEnv")
-    source_table = require_type(
-        require_key(create_cfg, "sourceTable", "createNext."),
-        str,
+    source_table = resolve_env_table_ref(
+        require_type(
+            require_key(create_cfg, "sourceTable", "createNext."),
+            str,
+            "createNext.sourceTable",
+        ),
+        runtime_env,
         "createNext.sourceTable",
     )
-    next_table = require_type(
-        require_key(create_cfg, "nextTable", "createNext."),
-        str,
+    next_table = resolve_env_table_ref(
+        require_type(
+            require_key(create_cfg, "nextTable", "createNext."),
+            str,
+            "createNext.nextTable",
+        ),
+        runtime_env,
         "createNext.nextTable",
     )
     unique_constraint_name = require_type(
@@ -60,17 +71,9 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         str,
         "createNext.autoIncrement.idColumn",
     )
-    sequence_name = require_type(
-        require_key(auto_inc_cfg, "sequenceName", "createNext.autoIncrement."),
-        str,
-        "createNext.autoIncrement.sequenceName",
-    )
 
-    require_table_ref(source_table, "createNext.sourceTable")
-    require_table_ref(next_table, "createNext.nextTable")
     require_identifier(unique_constraint_name, "createNext.uniqueConstraintName")
     require_identifier(id_column, "createNext.autoIncrement.idColumn")
-    require_table_ref(sequence_name, "createNext.autoIncrement.sequenceName")
 
     if not unique_columns:
         raise ConfigError("createNext.uniqueColumns 不能为空")
@@ -80,13 +83,13 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         normalized_unique_columns.append(require_identifier(value, f"createNext.uniqueColumns[{idx}]"))
 
     return {
+        "env": runtime_env,
         "dsnEnv": dsn_env,
         "sourceTable": source_table,
         "nextTable": next_table,
         "uniqueConstraintName": unique_constraint_name,
         "uniqueColumns": normalized_unique_columns,
         "idColumn": id_column,
-        "sequenceName": sequence_name,
     }
 
 
@@ -101,21 +104,15 @@ def _add_unique_constraint(cursor, table_ref: str, constraint_name: str, columns
     print(f"[OK] 已创建唯一约束: {table_ref}.{constraint_name}")
 
 
-def _ensure_auto_increment(cursor, table_ref: str, id_column: str, sequence_name: str) -> None:
+def _ensure_auto_increment(cursor, table_ref: str, id_column: str) -> None:
     if not column_exists(cursor, table_ref, id_column):
         raise RuntimeError(f"自增列不存在: {table_ref}.{id_column}")
 
-    cursor.execute(f"CREATE SEQUENCE IF NOT EXISTS {quote_table_ref(sequence_name)}")
-    cursor.execute(
-        f"ALTER SEQUENCE {quote_table_ref(sequence_name)} "
-        f"OWNED BY {quote_table_ref(table_ref)}.{quote_ident(id_column)}"
-    )
-    regclass_ref = quote_table_ref(sequence_name).replace("'", "''")
     cursor.execute(
         f"ALTER TABLE {quote_table_ref(table_ref)} "
-        f"ALTER COLUMN {quote_ident(id_column)} SET DEFAULT nextval('{regclass_ref}'::regclass)"
+        f"MODIFY COLUMN {quote_ident(id_column)} BIGINT NOT NULL AUTO_INCREMENT"
     )
-    print(f"[OK] 已设置自增: {table_ref}.{id_column} -> {sequence_name}")
+    print(f"[OK] 已设置自增: {table_ref}.{id_column}")
 
 
 def main() -> None:
@@ -132,7 +129,7 @@ def main() -> None:
     dsn = os.environ[dsn_env]
 
     with start_ssh_tunnel_from_env():
-        with connect(dsn, row_factory=dict_row) as conn:
+        with connect_mysql_from_dsn(dsn) as conn:
             with conn.cursor() as cursor:
                 if not table_exists(cursor, config["sourceTable"]):
                     raise RuntimeError(f"源表不存在: {config['sourceTable']}")
@@ -141,9 +138,9 @@ def main() -> None:
 
                 cursor.execute(
                     f"CREATE TABLE {quote_table_ref(config['nextTable'])} "
-                    f"(LIKE {quote_table_ref(config['sourceTable'])} INCLUDING ALL)"
+                    f"LIKE {quote_table_ref(config['sourceTable'])}"
                 )
-                print(f"[OK] 已创建新表: {config['nextTable']}")
+                print(f"[OK] [{config['env']}] 已创建新表: {config['nextTable']}")
 
                 _add_unique_constraint(
                     cursor,
@@ -155,7 +152,6 @@ def main() -> None:
                     cursor,
                     config["nextTable"],
                     config["idColumn"],
-                    config["sequenceName"],
                 )
 
             conn.commit()

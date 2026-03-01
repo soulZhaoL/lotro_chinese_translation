@@ -5,18 +5,17 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from psycopg import connect
-from psycopg.rows import dict_row
-
 from common import (
     ConfigError,
+    connect_mysql_from_dsn,
     load_env_file,
     load_yaml_config,
     quote_ident,
     quote_table_ref,
     require_identifier,
+    require_runtime_env,
     require_key,
-    require_table_ref,
+    resolve_env_table_ref,
     require_type,
     split_table_ref,
     start_ssh_tunnel_from_env,
@@ -25,19 +24,28 @@ from common import (
 
 
 def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    runtime_env = require_runtime_env(
+        require_type(require_key(config, "env", ""), str, "env"),
+        "env",
+    )
     database = require_type(require_key(config, "database", ""), dict, "database")
     backup = require_type(require_key(config, "backup", ""), dict, "backup")
 
     dsn_env = require_type(require_key(database, "dsnEnv", "database."), str, "database.dsnEnv")
-    source_table = require_type(require_key(backup, "sourceTable", "backup."), str, "backup.sourceTable")
-    backup_table = require_type(require_key(backup, "backupTable", "backup."), str, "backup.backupTable")
+    source_table = resolve_env_table_ref(
+        require_type(require_key(backup, "sourceTable", "backup."), str, "backup.sourceTable"),
+        runtime_env,
+        "backup.sourceTable",
+    )
+    backup_table = resolve_env_table_ref(
+        require_type(require_key(backup, "backupTable", "backup."), str, "backup.backupTable"),
+        runtime_env,
+        "backup.backupTable",
+    )
     mode = require_type(require_key(backup, "mode", "backup."), str, "backup.mode")
 
     if mode != "rename":
         raise ConfigError("backup.mode 仅支持 rename")
-
-    require_table_ref(source_table, "backup.sourceTable")
-    require_table_ref(backup_table, "backup.backupTable")
 
     source_schema, source_name = split_table_ref(source_table)
     backup_schema, backup_name = split_table_ref(backup_table)
@@ -48,6 +56,7 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     require_identifier(backup_name, "backup.backupTable.name")
 
     return {
+        "env": runtime_env,
         "dsnEnv": dsn_env,
         "sourceTable": source_table,
         "backupTable": backup_table,
@@ -70,7 +79,7 @@ def main() -> None:
     dsn = os.environ[dsn_env]
 
     with start_ssh_tunnel_from_env():
-        with connect(dsn, row_factory=dict_row) as conn:
+        with connect_mysql_from_dsn(dsn) as conn:
             with conn.cursor() as cursor:
                 if not table_exists(cursor, config["sourceTable"]):
                     raise RuntimeError(f"源表不存在: {config['sourceTable']}")
@@ -84,6 +93,7 @@ def main() -> None:
             conn.commit()
 
     print("[DONE] Step1 备份完成")
+    print(f"[ENV] {config['env']}")
     print(f"[SOURCE] {config['sourceTable']}")
     print(f"[BACKUP] {config['backupTable']}")
 

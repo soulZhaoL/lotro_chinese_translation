@@ -4,13 +4,13 @@
 ```mermaid
 flowchart TD
     UI[前端界面] --> API[后端服务]
-    API --> DB[(PostgreSQL)]
+    API --> DB[(MySQL)]
 ```
 
 ## 技术栈
 - **后端:** Python + FastAPI
 - **前端:** React + Ant Design + Vite
-- **数据:** PostgreSQL
+- **数据:** MySQL
 
 ## 核心流程
 ```mermaid

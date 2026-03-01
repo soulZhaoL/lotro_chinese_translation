@@ -6,19 +6,18 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from psycopg import connect
-from psycopg.rows import dict_row
-
 from common import (
     ConfigError,
     column_exists,
+    connect_mysql_from_dsn,
     load_env_file,
     load_yaml_config,
     quote_ident,
     quote_table_ref,
     require_identifier,
+    require_runtime_env,
     require_key,
-    require_table_ref,
+    resolve_env_table_ref,
     require_type,
     start_ssh_tunnel_from_env,
     table_exists,
@@ -26,6 +25,10 @@ from common import (
 
 
 def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    runtime_env = require_runtime_env(
+        require_type(require_key(config, "env", ""), str, "env"),
+        "env",
+    )
     database = require_type(require_key(config, "database", ""), dict, "database")
     hash_cfg = require_type(require_key(config, "hash", ""), dict, "hash")
 
@@ -50,7 +53,7 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     normalized_tables: List[str] = []
     for idx, table_ref in enumerate(tables):
         table_value = require_type(table_ref, str, f"hash.tables[{idx}]")
-        normalized_tables.append(require_table_ref(table_value, f"hash.tables[{idx}]"))
+        normalized_tables.append(resolve_env_table_ref(table_value, runtime_env, f"hash.tables[{idx}]"))
 
     require_identifier(id_column, "hash.idColumn")
     require_identifier(source_text_column, "hash.sourceTextColumn")
@@ -66,6 +69,7 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         raise ConfigError("hash.missingTablePolicy 仅支持 skip/error")
 
     return {
+        "env": runtime_env,
         "dsnEnv": dsn_env,
         "tables": normalized_tables,
         "idColumn": id_column,
@@ -151,12 +155,12 @@ def main() -> None:
     dsn = os.environ[dsn_env]
 
     with start_ssh_tunnel_from_env():
-        with connect(dsn, row_factory=dict_row) as conn:
+        with connect_mysql_from_dsn(dsn) as conn:
             with conn.cursor() as cursor:
                 for table_ref in config["tables"]:
                     scanned, updated = _fill_table_hash(cursor, config, table_ref)
                     conn.commit()
-                    print(f"[DONE] {table_ref} scanned={scanned}, updated={updated}")
+                    print(f"[DONE] [{config['env']}] {table_ref} scanned={scanned}, updated={updated}")
 
     print("[DONE] Step2 完成")
 

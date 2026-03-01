@@ -9,7 +9,7 @@ from server.config import loader
 
 def _build_config(enabled: bool) -> Dict[str, object]:
     return {
-        "database": {"dsn": "postgresql://test:pass@localhost:5432/lotro"},
+        "database": {"dsn": "mysql://test:pass@localhost:3306/lotro?charset=utf8mb4"},
         "auth": {
             "hash_algorithm": "sha256",
             "salt_bytes": 16,

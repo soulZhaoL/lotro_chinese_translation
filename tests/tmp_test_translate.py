@@ -19,11 +19,10 @@ def test_translate_update(seed_user):
             """
             INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
             """,
             ("file_a", 1001, 1, "hello", "你好", 1, 1),
         )
-        text_id = cursor.fetchone()["id"]
+        text_id = cursor.lastrowid
 
     client = TestClient(app)
     token = _login(client, seed_user)

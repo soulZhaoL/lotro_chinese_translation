@@ -1,7 +1,10 @@
 # 主文本列表与详情路由。
-from typing import Any, Dict, List, Optional
+from io import BytesIO
+from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel
 
 from ..config import get_config
@@ -12,12 +15,119 @@ from .deps import require_auth
 router = APIRouter(prefix="/texts", tags=["texts"])
 
 
+TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
+STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
+STATUS_VALUE_SET = {1, 2, 3}
+
+
 def _apply_pagination(page: int, page_size: int) -> int:
     if page < 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page 必须 >= 1")
     if page_size < 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 必须 >= 1")
     return (page - 1) * page_size
+
+
+def _is_empty_cell(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    return False
+
+
+def _parse_required_int(value: Any, field_name: str, row_number: int) -> int:
+    if _is_empty_cell(value):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"第 {row_number} 行字段 {field_name} 不能为空")
+    if isinstance(value, bool):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"第 {row_number} 行字段 {field_name} 类型错误，必须为整数",
+        )
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.isdigit():
+            return int(stripped)
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"第 {row_number} 行字段 {field_name} 类型错误，必须为整数",
+    )
+
+
+def _parse_status(value: Any, row_number: int) -> int:
+    if _is_empty_cell(value):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"第 {row_number} 行字段 状态 不能为空")
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped in STATUS_LABEL_TO_VALUE:
+            return STATUS_LABEL_TO_VALUE[stripped]
+        if stripped.isdigit():
+            status_value = int(stripped)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"第 {row_number} 行字段 状态 非法，必须为 1/2/3 或 新增/修改/已完成",
+            )
+    else:
+        status_value = _parse_required_int(value, "状态", row_number)
+
+    if status_value not in STATUS_VALUE_SET:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"第 {row_number} 行字段 状态 非法，必须为 1/2/3 或 新增/修改/已完成",
+        )
+    return status_value
+
+
+def _parse_required_str(value: Any, field_name: str, row_number: int) -> str:
+    if _is_empty_cell(value):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"第 {row_number} 行字段 {field_name} 不能为空")
+    return str(value)
+
+
+def _normalize_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _validate_template_header(header_values: List[Any]) -> None:
+    if len(header_values) < len(TEXT_TEMPLATE_HEADERS):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传模板缺少必要列")
+
+    expected = list(TEXT_TEMPLATE_HEADERS)
+    actual = ["" if value is None else str(value).strip() for value in header_values[: len(TEXT_TEMPLATE_HEADERS)]]
+    if actual != expected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"上传模板表头不匹配，必须为: {'/'.join(TEXT_TEMPLATE_HEADERS)}",
+        )
+
+    extra_values = header_values[len(TEXT_TEMPLATE_HEADERS) :]
+    for column_index, value in enumerate(extra_values, start=len(TEXT_TEMPLATE_HEADERS) + 1):
+        if not _is_empty_cell(value):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"上传模板存在多余表头列: 第 {column_index} 列",
+            )
+
+
+def _load_upload_sheet(file_bytes: bytes):
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件为空")
+    try:
+        workbook = load_workbook(filename=BytesIO(file_bytes), read_only=True, data_only=True)
+    except Exception as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"上传文件解析失败: {error}") from error
+    if not workbook.worksheets:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件缺少工作表")
+    return workbook.worksheets[0]
 
 
 @router.get("")
@@ -96,7 +206,7 @@ def list_parent_texts(
                 SELECT 1
                 FROM text_main tmx
                 WHERE tmx.fid = tm.fid
-                  AND tmx."sourceText" ILIKE %s
+                  AND tmx."sourceText" LIKE %s
             )
             """
         )
@@ -108,7 +218,7 @@ def list_parent_texts(
                 SELECT 1
                 FROM text_main tmx
                 WHERE tmx.fid = tm.fid
-                  AND tmx."translatedText" ILIKE %s
+                  AND tmx."translatedText" LIKE %s
             )
             """
         )
@@ -120,12 +230,23 @@ def list_parent_texts(
         conditions.append('tm."uptTime" <= %s')
         params.append(updatedTo)
     if claimer is not None:
-        conditions.append("u.username ILIKE %s")
+        conditions.append(
+            """
+            (
+              SELECT u.username
+              FROM text_claims c
+              JOIN users u ON u.id = c."userId"
+              WHERE c."textId" = tm.id
+              ORDER BY c."claimedAt" DESC, c.id DESC
+              LIMIT 1
+            ) LIKE %s
+            """
+        )
         params.append(f"%{claimer}%")
     if claimed is True:
-        conditions.append("tc.id IS NOT NULL")
+        conditions.append('EXISTS (SELECT 1 FROM text_claims c WHERE c."textId" = tm.id)')
     if claimed is False:
-        conditions.append("tc.id IS NULL")
+        conditions.append('NOT EXISTS (SELECT 1 FROM text_claims c WHERE c."textId" = tm.id)')
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -136,14 +257,6 @@ def list_parent_texts(
             f"""
             SELECT COUNT(*) AS total
             FROM text_main tm
-            LEFT JOIN LATERAL (
-                SELECT c.id, c."userId", c."claimedAt"
-                FROM text_claims c
-                WHERE c."textId" = tm.id
-                ORDER BY c."claimedAt" DESC
-                LIMIT 1
-            ) tc ON true
-            LEFT JOIN users u ON u.id = tc."userId"
             {where_clause}
             """,
             tuple(params),
@@ -158,31 +271,46 @@ def list_parent_texts(
               tm."textId" AS "textId",
               tm.part,
               CASE
-                WHEN length(tm."sourceText") > %s THEN substring(tm."sourceText" from 1 for %s) || '...'
+                WHEN length(tm."sourceText") > %s THEN CONCAT(SUBSTRING(tm."sourceText", 1, %s), '...')
                 ELSE tm."sourceText"
               END AS "sourceText",
               CASE
                 WHEN tm."translatedText" IS NOT NULL AND length(tm."translatedText") > %s
-                  THEN substring(tm."translatedText" from 1 for %s) || '...'
+                  THEN CONCAT(SUBSTRING(tm."translatedText", 1, %s), '...')
                 ELSE tm."translatedText"
               END AS "translatedText",
               tm.status,
               tm."editCount" AS "editCount",
               tm."uptTime" AS "uptTime",
               tm."crtTime" AS "crtTime",
-              tc.id AS "claimId",
-              u.username AS "claimedBy",
-              tc."claimedAt" AS "claimedAt",
-              CASE WHEN tc.id IS NULL THEN FALSE ELSE TRUE END AS "isClaimed"
-            FROM text_main tm
-            LEFT JOIN LATERAL (
-                SELECT c.id, c."userId", c."claimedAt"
+              (
+                SELECT c.id
                 FROM text_claims c
                 WHERE c."textId" = tm.id
-                ORDER BY c."claimedAt" DESC
+                ORDER BY c."claimedAt" DESC, c.id DESC
                 LIMIT 1
-            ) tc ON true
-            LEFT JOIN users u ON u.id = tc."userId"
+              ) AS "claimId",
+              (
+                SELECT u.username
+                FROM text_claims c
+                JOIN users u ON u.id = c."userId"
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimedBy",
+              (
+                SELECT c."claimedAt"
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimedAt",
+              EXISTS (
+                SELECT 1
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+              ) AS "isClaimed"
+            FROM text_main tm
             {where_clause}
             ORDER BY tm."uptTime" DESC
             LIMIT %s OFFSET %s
@@ -190,6 +318,8 @@ def list_parent_texts(
             tuple([max_text_length, max_text_length, max_text_length, max_text_length] + params + [effective_page_size, offset]),
         )
         items = cursor.fetchall()
+        for item in items:
+            item["isClaimed"] = bool(item["isClaimed"])
 
     return success_response(
         {
@@ -229,10 +359,10 @@ def list_child_texts(
         where_clause += ' AND tm."textId" = %s'
         params.append(textId)
     if sourceKeyword is not None:
-        where_clause += ' AND tm."sourceText" ILIKE %s'
+        where_clause += ' AND tm."sourceText" LIKE %s'
         params.append(f"%{sourceKeyword}%")
     if translatedKeyword is not None:
-        where_clause += ' AND tm."translatedText" ILIKE %s'
+        where_clause += ' AND tm."translatedText" LIKE %s'
         params.append(f"%{translatedKeyword}%")
 
     max_text_length = config["text_list"]["max_text_length"]
@@ -268,31 +398,46 @@ def list_child_texts(
               tm."textId" AS "textId",
               tm.part,
               CASE
-                WHEN length(tm."sourceText") > %s THEN substring(tm."sourceText" from 1 for %s) || '...'
+                WHEN length(tm."sourceText") > %s THEN CONCAT(SUBSTRING(tm."sourceText", 1, %s), '...')
                 ELSE tm."sourceText"
               END AS "sourceText",
               CASE
                 WHEN tm."translatedText" IS NOT NULL AND length(tm."translatedText") > %s
-                  THEN substring(tm."translatedText" from 1 for %s) || '...'
+                  THEN CONCAT(SUBSTRING(tm."translatedText", 1, %s), '...')
                 ELSE tm."translatedText"
               END AS "translatedText",
               tm.status,
               tm."editCount" AS "editCount",
               tm."uptTime" AS "uptTime",
               tm."crtTime" AS "crtTime",
-              tc.id AS "claimId",
-              u.username AS "claimedBy",
-              tc."claimedAt" AS "claimedAt",
-              CASE WHEN tc.id IS NULL THEN FALSE ELSE TRUE END AS "isClaimed"
-            FROM text_main tm
-            LEFT JOIN LATERAL (
-                SELECT c.id, c."userId", c."claimedAt"
+              (
+                SELECT c.id
                 FROM text_claims c
                 WHERE c."textId" = tm.id
-                ORDER BY c."claimedAt" DESC
+                ORDER BY c."claimedAt" DESC, c.id DESC
                 LIMIT 1
-            ) tc ON true
-            LEFT JOIN users u ON u.id = tc."userId"
+              ) AS "claimId",
+              (
+                SELECT u.username
+                FROM text_claims c
+                JOIN users u ON u.id = c."userId"
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimedBy",
+              (
+                SELECT c."claimedAt"
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimedAt",
+              EXISTS (
+                SELECT 1
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+              ) AS "isClaimed"
+            FROM text_main tm
             {where_clause}
             ORDER BY tm.part ASC
             LIMIT %s OFFSET %s
@@ -300,6 +445,8 @@ def list_child_texts(
             tuple([max_text_length, max_text_length, max_text_length, max_text_length] + params + [effective_page_size, offset]),
         )
         items = cursor.fetchall()
+        for item in items:
+            item["isClaimed"] = bool(item["isClaimed"])
 
     return success_response(
         {
@@ -309,6 +456,173 @@ def list_child_texts(
             "pageSize": effective_page_size,
         }
     )
+
+
+@router.get("/download")
+def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
+    """按固定模板下载文本数据。"""
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "texts"
+    sheet.append(list(TEXT_TEMPLATE_HEADERS))
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+              id,
+              fid,
+              "textId" AS "textId",
+              part,
+              "sourceText" AS "sourceText",
+              "translatedText" AS "translatedText",
+              status
+            FROM text_main
+            ORDER BY id ASC
+            """
+        )
+        rows = cursor.fetchall()
+
+    for row in rows:
+        sheet.append(
+            [
+                row["id"],
+                row["fid"],
+                row["textId"],
+                row["part"],
+                row["sourceText"],
+                row["translatedText"],
+                row["status"],
+            ]
+        )
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="text_template.xlsx"'},
+    )
+
+
+@router.post("/upload")
+async def upload_text_template(
+    file: UploadFile = File(...),
+    reason: Optional[str] = Form(default=None),
+    user: Dict[str, Any] = Depends(require_auth),
+):
+    """按模板上传翻译结果并覆盖译文与状态。"""
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件缺少文件名")
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件必须为 .xlsx 格式")
+
+    config = get_config()
+    text_import_export = config["text_import_export"]
+    max_upload_rows = text_import_export["max_upload_rows"]
+
+    file_bytes = await file.read()
+    sheet = _load_upload_sheet(file_bytes)
+
+    header_rows = list(sheet.iter_rows(min_row=1, max_row=1))
+    if not header_rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件为空")
+    header_values = [cell.value for cell in header_rows[0]]
+    _validate_template_header(header_values)
+
+    parsed_rows: List[Dict[str, Any]] = []
+    for row_index, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        cells = list(row[: len(TEXT_TEMPLATE_HEADERS)])
+        if len(cells) < len(TEXT_TEMPLATE_HEADERS):
+            cells.extend([None] * (len(TEXT_TEMPLATE_HEADERS) - len(cells)))
+        if all(_is_empty_cell(item) for item in cells):
+            continue
+
+        extra_cells = list(row[len(TEXT_TEMPLATE_HEADERS) :])
+        if any(not _is_empty_cell(item) for item in extra_cells):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"第 {row_index} 行存在模板外数据，请删除多余列",
+            )
+
+        row_id = _parse_required_int(cells[0], "编号", row_index)
+        text_id = _parse_required_int(cells[2], "TextId", row_index)
+        part = _parse_required_int(cells[3], "Part", row_index)
+        if row_id <= 0 or text_id <= 0 or part <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"第 {row_index} 行编号/TextId/Part 必须 > 0")
+
+        parsed_rows.append(
+            {
+                "rowNumber": row_index,
+                "id": row_id,
+                "fid": _parse_required_str(cells[1], "FID", row_index),
+                "textId": text_id,
+                "part": part,
+                "translatedText": _normalize_text(cells[5]),
+                "status": _parse_status(cells[6], row_index),
+            }
+        )
+
+    if not parsed_rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件没有可处理的数据行")
+
+    if len(parsed_rows) > max_upload_rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"上传行数超限，最大允许 {max_upload_rows} 行",
+        )
+
+    ids = [item["id"] for item in parsed_rows]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件存在重复编号")
+
+    placeholders = ",".join(["%s"] * len(ids))
+    with db_cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT id, fid, "textId" AS "textId", part, "translatedText" AS "translatedText"
+            FROM text_main
+            WHERE id IN ({placeholders})
+            """,
+            tuple(ids),
+        )
+        db_rows = cursor.fetchall()
+        db_map = {item["id"]: item for item in db_rows}
+
+        for item in parsed_rows:
+            db_item = db_map.get(item["id"])
+            if db_item is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"第 {item['rowNumber']} 行编号不存在: {item['id']}",
+                )
+            if db_item["fid"] != item["fid"] or db_item["textId"] != item["textId"] or db_item["part"] != item["part"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"第 {item['rowNumber']} 行校验失败: 编号/FID/TextId/Part 与数据库不匹配",
+                )
+
+        for item in parsed_rows:
+            db_item = db_map[item["id"]]
+            before_text = db_item["translatedText"] or ""
+            cursor.execute(
+                """
+                UPDATE text_main
+                SET "translatedText" = %s, status = %s, "editCount" = "editCount" + 1, "uptTime" = NOW()
+                WHERE id = %s
+                """,
+                (item["translatedText"], item["status"], item["id"]),
+            )
+            cursor.execute(
+                """
+                INSERT INTO text_changes ("textId", "userId", "beforeText", "afterText", reason)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (item["id"], user["userId"], before_text, item["translatedText"] or "", reason),
+            )
+
+    return success_response({"updatedCount": len(parsed_rows)})
 
 
 @router.get("/by-textid")

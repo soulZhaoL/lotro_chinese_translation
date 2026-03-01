@@ -1,3 +1,16 @@
+"""
+通用 xlsx -> INSERT SQL 生成器。
+
+适用场景:
+1. Excel 每一行已经对应数据库一行，无需按分段协议拆分文本。
+2. 通过 YAML 明确声明: 输入列索引 -> 输出列名 的映射关系。
+3. 支持 fixed_values 补充常量列，支持 on_missing=error/skip。
+
+不做的事情:
+- 不解析 `textId::::::[text]` 这类分段协议。
+- 不做 source/translated 对齐校验。
+"""
+
 import argparse
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -79,7 +92,7 @@ def _normalize_cell(value: Any) -> Any:
 def _sql_identifier(name: str) -> str:
     if not name:
         raise ConfigError("SQL 标识符不能为空")
-    return '"' + name.replace('"', '""') + '"'
+    return "`" + name.replace("`", "``") + "`"
 
 
 def _sql_qualified_identifier(name: str) -> str:
@@ -96,7 +109,19 @@ def _sql_literal(value: Any) -> str:
         return "TRUE" if value else "FALSE"
     if isinstance(value, (int, float)):
         return str(value)
-    text = str(value).replace("'", "''")
+    # MySQL 字符串字面量转义：
+    # 1) 先处理反斜杠，避免末尾 "\" 吞掉结束引号
+    # 2) 再处理控制字符与单引号
+    text = str(value)
+    text = text.replace("\\", "\\\\")
+    text = text.replace("\0", "\\0")
+    text = text.replace("\b", "\\b")
+    text = text.replace("\t", "\\t")
+    text = text.replace("\n", "\\n")
+    text = text.replace("\f", "\\f")
+    text = text.replace("\r", "\\r")
+    text = text.replace("\x1a", "\\Z")
+    text = text.replace("'", "''")
     return "'" + text + "'"
 
 
@@ -109,6 +134,7 @@ def _build_output_row(
     on_missing: str,
     row_index: int,
 ) -> Tuple[bool, List[str]]:
+    # 将单行 Excel 数据按“输出列定义”拼装为 SQL literal 列表。
     values: List[str] = []
     for col in output_columns:
         if col in source_map:
@@ -256,6 +282,7 @@ def _write_insert(
 
 
 def main() -> None:
+    # 该脚本是“通用映射模式”：逐行读取 -> 映射字段 -> 分块写入 INSERT。
     parser = argparse.ArgumentParser(description="xlsx 转 INSERT 语句生成器")
     parser.add_argument("--config", required=True, help="配置文件路径")
     parser.add_argument("--row-range", help="仅处理 m-n 行数据（覆盖配置中的 row_start/row_end）")

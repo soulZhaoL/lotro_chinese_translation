@@ -1,7 +1,9 @@
+env: test
+
 database:
   dsnEnv: LOTRO_DATABASE_DSN
 
 backup:
   mode: rename
-  sourceTable: lotro.text_main
-  backupTable: lotro.text_main_bak_u46
+  sourceTable: text_main
+  backupTable: text_main_bak_u46

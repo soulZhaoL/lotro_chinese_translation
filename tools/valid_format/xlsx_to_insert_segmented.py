@@ -1,3 +1,17 @@
+"""
+分段协议版 xlsx -> INSERT SQL 生成器。
+
+适用场景:
+1. Excel 原文/译文单元格使用 `|||` 分段，段内为 `textId + 协议包裹文本` 格式。
+2. 需要先按 fid+splitPart 合并多行，再按分段协议拆解为多条数据库记录。
+3. 需要保证 source/translated 的分段数量与 textId 一一对应。
+
+相对 `xlsx_to_insert.py` 的关键差异:
+- 本脚本有强格式约束与一致性校验（textId、段数、分段格式）。
+- 本脚本会计算 sourceTextHash，并按段生成 part（从 1 递增）。
+- 本脚本默认用于 text_main 一类“分段文本”导入，不是通用列映射工具。
+"""
+
 import argparse
 import hashlib
 import re
@@ -135,7 +149,7 @@ def _normalize_split_part(value: Any, row_index: int) -> int:
 def _sql_identifier(name: str) -> str:
     if name == "":
         raise ConfigError("SQL identifier cannot be empty")
-    return '"' + name.replace('"', '""') + '"'
+    return "`" + name.replace("`", "``") + "`"
 
 
 def _sql_qualified_identifier(name: str) -> str:
@@ -152,7 +166,19 @@ def _sql_literal(value: Any) -> str:
         return "TRUE" if value else "FALSE"
     if isinstance(value, (int, float)):
         return str(value)
-    text = str(value).replace("'", "''")
+    # MySQL 字符串字面量转义：
+    # 1) 先处理反斜杠，避免末尾 "\" 吞掉结束引号
+    # 2) 再处理控制字符与单引号
+    text = str(value)
+    text = text.replace("\\", "\\\\")
+    text = text.replace("\0", "\\0")
+    text = text.replace("\b", "\\b")
+    text = text.replace("\t", "\\t")
+    text = text.replace("\n", "\\n")
+    text = text.replace("\f", "\\f")
+    text = text.replace("\r", "\\r")
+    text = text.replace("\x1a", "\\Z")
+    text = text.replace("'", "''")
     return "'" + text + "'"
 
 
@@ -360,6 +386,8 @@ def _collect_merged_fid_rows(
     skip_blank_rows: bool,
     row_error_policy: str,
 ) -> Tuple[List[Tuple[str, str, str, int]], int, int]:
+    # 先按 fid 聚合，再按 splitPart 排序拼接 source/translated，
+    # 解决“同一 fid 分散在多行”的输入结构。
     max_idx = max(fid_idx, split_part_idx, source_idx, translated_idx)
     fid_order: List[str] = []
     grouped: Dict[str, Dict[int, Tuple[int, str, str]]] = {}
@@ -430,6 +458,7 @@ def _build_output_rows_for_excel_row(
     status_value: int,
     is_claimed_value: bool,
 ) -> List[List[str]]:
+    # 对单个 fid 的合并文本做协议拆分，并产出多条 INSERT 记录（每段一条）。
     source_segments = _parse_cell_segments(source_raw, split_delimiter, patterns, row_index, "sourceText")
     translated_segments = _parse_cell_segments(translated_raw, split_delimiter, patterns, row_index, "translatedText")
 
@@ -494,6 +523,7 @@ def _write_insert(handle, table: str, output_columns: Dict[str, str], rows: List
 
 
 def main() -> None:
+    # 该脚本是“分段解析模式”：合并 fid -> 校验分段 -> 拆分为多行 INSERT。
     parser = argparse.ArgumentParser(description="Split fixed-format xlsx text and generate INSERT SQL")
     parser.add_argument("--config", required=True, help="YAML config path")
     parser.add_argument("--row-range", help="Override rows with m-n")
@@ -597,3 +627,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    # python ./tools/valid_format/xlsx_to_insert_segmented.py --config ./tools/valid_format/xlsx_to_insert_segmented.yaml

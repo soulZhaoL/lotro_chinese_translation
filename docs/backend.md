@@ -3,7 +3,7 @@
 ## 环境依赖
 
 - Python 3.11+
-- PostgreSQL 14+
+- MySQL 8.0+
 
 ## 安装依赖
 
@@ -23,7 +23,7 @@ pip install -r requirements.txt
 在项目根目录创建 `.env`（可参考 `.env.example`），示例：
 
 ```
-LOTRO_DATABASE_DSN=postgresql://user:password@localhost:5432/lotro
+LOTRO_DATABASE_DSN=mysql://user:password@localhost:3306/lotro?charset=utf8mb4
 LOTRO_TOKEN_SECRET=replace_with_strong_secret
 ```
 
@@ -38,30 +38,30 @@ LOTRO_ENV_PATH=/abs/path/to/.env
 数据库未初始化时，执行迁移脚本：
 
 ```
-psql "$LOTRO_DATABASE_DSN" -f server/migrations/001_init.sql
+mysql --defaults-extra-file=/path/to/mysql.cnf < server/migrations/001_init.sql
 ```
 
 若数据库已存在旧版 snake_case 列，请按顺序执行存量迁移：
 
 ```
-psql "$LOTRO_DATABASE_DSN" -f server/migrations/002_camel_case_columns.sql
-psql "$LOTRO_DATABASE_DSN" -f server/migrations/003_rename_time_columns_to_upt_crt.sql
+mysql --defaults-extra-file=/path/to/mysql.cnf < server/migrations/002_camel_case_columns.sql
+mysql --defaults-extra-file=/path/to/mysql.cnf < server/migrations/003_rename_time_columns_to_upt_crt.sql
 ```
 
 若数据库已是 camelCase（`createdAt`/`updatedAt`）但尚未切换为 `crtTime`/`uptTime`，只需执行：
 
 ```
-psql "$LOTRO_DATABASE_DSN" -f server/migrations/003_rename_time_columns_to_upt_crt.sql
+mysql --defaults-extra-file=/path/to/mysql.cnf < server/migrations/003_rename_time_columns_to_upt_crt.sql
 ```
 
 ## 启动服务
 
 ### 一键启动（推荐）
 
-项目根目录提供临时脚本 `tmp_start_dev.sh`，用于一键启动 SSH 隧道与后端（不提供默认值，必须显式配置）：
+项目根目录提供脚本 `server/start_dev.sh`，用于一键启动 SSH 隧道与后端（不提供默认值，必须显式配置）：
 
 ```
-./tmp_start_dev.sh
+./server/start_dev.sh --env .env
 ```
 
 脚本要求显式环境变量配置（避免硬编码敏感信息）：
@@ -72,7 +72,7 @@ LOTRO_SSH_USER=ubuntu
 LOTRO_SSH_PORT=22
 LOTRO_TUNNEL_PORT=5433
 LOTRO_REMOTE_DB_HOST=127.0.0.1
-LOTRO_REMOTE_DB_PORT=5432
+LOTRO_REMOTE_DB_PORT=3306
 LOTRO_BACKEND_HOST=0.0.0.0
 LOTRO_BACKEND_PORT=8000
 ```
@@ -88,7 +88,7 @@ LOTRO_ENV_PATH=/abs/path/to/.env
 ### 手动启动
 
 ```
-ssh -N -L 5433:127.0.0.1:5432 ubuntu@43.133.38.166 -p 22
+ssh -N -L 5433:127.0.0.1:3306 ubuntu@43.133.38.166 -p 22
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 

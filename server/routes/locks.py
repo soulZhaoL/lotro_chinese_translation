@@ -56,11 +56,10 @@ def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_aut
             """
             INSERT INTO text_locks ("textId", "userId", "lockedAt", "expiresAt", "releasedAt")
             VALUES (%s, %s, %s, %s, NULL)
-            RETURNING id
             """,
             (request.textId, user["userId"], now, expiresAt),
         )
-        lockId = cursor.fetchone()["id"]
+        lockId = cursor.lastrowid
 
     return success_response({"lockId": lockId, "expiresAt": expiresAt})
 

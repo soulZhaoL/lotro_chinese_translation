@@ -1,210 +1,136 @@
--- LOTRO 文本汉化系统 - 初始表结构
+-- LOTRO 文本汉化系统 - MySQL 初始表结构
 
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
 
--- 确保数据库编码为 UTF8，避免特殊字符写入异常
-DO $$
-BEGIN
-  IF (SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database()) <> 'UTF8' THEN
-    RAISE EXCEPTION 'Database encoding must be UTF8 for special characters.';
-  END IF;
-END
-$$;
+DROP TABLE IF EXISTS text_changes;
+DROP TABLE IF EXISTS text_locks;
+DROP TABLE IF EXISTS text_claims;
+DROP TABLE IF EXISTS text_main;
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS dictionary_entries;
 
-DROP TABLE IF EXISTS text_changes CASCADE;
-DROP TABLE IF EXISTS text_locks CASCADE;
-DROP TABLE IF EXISTS text_claims CASCADE;
-DROP TABLE IF EXISTS text_main CASCADE;
-DROP TABLE IF EXISTS role_permissions CASCADE;
-DROP TABLE IF EXISTS permissions CASCADE;
-DROP TABLE IF EXISTS user_roles CASCADE;
-DROP TABLE IF EXISTS roles CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS dictionary_entries CASCADE;
+SET FOREIGN_KEY_CHECKS = 1;
 
--- users
 CREATE TABLE users (
-  id BIGSERIAL PRIMARY KEY,
-  username VARCHAR(64) NOT NULL UNIQUE,
-  "passwordHash" VARCHAR(128) NOT NULL,
-  "passwordSalt" VARCHAR(64) NOT NULL,
-  "isGuest" BOOLEAN NOT NULL DEFAULT FALSE,
-  "crtTime" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "uptTime" TIMESTAMP NOT NULL DEFAULT NOW()
-);
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  username VARCHAR(64) NOT NULL COMMENT '用户名',
+  `passwordHash` VARCHAR(128) NOT NULL COMMENT '密码哈希',
+  `passwordSalt` VARCHAR(64) NOT NULL COMMENT '密码盐值',
+  `isGuest` BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否游客',
+  `crtTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `uptTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户表';
 
-COMMENT ON TABLE users IS '用户表';
-COMMENT ON COLUMN users.id IS '主键ID';
-COMMENT ON COLUMN users.username IS '用户名';
-COMMENT ON COLUMN users."passwordHash" IS '密码哈希';
-COMMENT ON COLUMN users."passwordSalt" IS '密码盐';
-COMMENT ON COLUMN users."isGuest" IS '是否游客';
-COMMENT ON COLUMN users."crtTime" IS '创建时间';
-COMMENT ON COLUMN users."uptTime" IS '更新时间';
-
--- roles
 CREATE TABLE roles (
-  id BIGSERIAL PRIMARY KEY,
-  name VARCHAR(32) NOT NULL UNIQUE,
-  description VARCHAR(128)
-);
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  name VARCHAR(32) NOT NULL COMMENT '角色名',
+  description VARCHAR(128) COMMENT '角色描述',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_roles_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色表';
 
-COMMENT ON TABLE roles IS '角色表';
-COMMENT ON COLUMN roles.id IS '主键ID';
-COMMENT ON COLUMN roles.name IS '角色名';
-COMMENT ON COLUMN roles.description IS '角色描述';
-
--- user_roles
 CREATE TABLE user_roles (
-  "userId" BIGINT NOT NULL,
-  "roleId" BIGINT NOT NULL,
-  PRIMARY KEY ("userId", "roleId")
-);
+  `userId` BIGINT NOT NULL COMMENT '用户ID',
+  `roleId` BIGINT NOT NULL COMMENT '角色ID',
+  PRIMARY KEY (`userId`, `roleId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户-角色关联表';
 
-COMMENT ON TABLE user_roles IS '用户-角色关联表';
-COMMENT ON COLUMN user_roles."userId" IS '用户ID';
-COMMENT ON COLUMN user_roles."roleId" IS '角色ID';
-
--- permissions
 CREATE TABLE permissions (
-  id BIGSERIAL PRIMARY KEY,
-  "permKey" VARCHAR(64) NOT NULL UNIQUE,
-  description VARCHAR(128)
-);
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `permKey` VARCHAR(64) NOT NULL COMMENT '权限标识',
+  description VARCHAR(128) COMMENT '权限描述',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_permissions_perm_key (`permKey`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='权限表';
 
-COMMENT ON TABLE permissions IS '权限表';
-COMMENT ON COLUMN permissions.id IS '主键ID';
-COMMENT ON COLUMN permissions."permKey" IS '权限标识';
-COMMENT ON COLUMN permissions.description IS '权限描述';
-
--- role_permissions
 CREATE TABLE role_permissions (
-  "roleId" BIGINT NOT NULL,
-  "permId" BIGINT NOT NULL,
-  PRIMARY KEY ("roleId", "permId")
-);
+  `roleId` BIGINT NOT NULL COMMENT '角色ID',
+  `permId` BIGINT NOT NULL COMMENT '权限ID',
+  PRIMARY KEY (`roleId`, `permId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色-权限关联表';
 
-COMMENT ON TABLE role_permissions IS '角色-权限关联表';
-COMMENT ON COLUMN role_permissions."roleId" IS '角色ID';
-COMMENT ON COLUMN role_permissions."permId" IS '权限ID';
-
--- text_main
 CREATE TABLE text_main (
-  id BIGSERIAL PRIMARY KEY,
-  fid VARCHAR(64) NOT NULL,
-  "textId" BIGINT NOT NULL,
-  part INTEGER NOT NULL,
-  "sourceText" TEXT,
-  "sourceTextHash" VARCHAR(64),
-  "translatedText" TEXT,
-  status SMALLINT NOT NULL DEFAULT 1,
-  "isClaimed" BOOLEAN NOT NULL DEFAULT FALSE,
-  "editCount" INT NOT NULL DEFAULT 0,
-  "uptTime" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "crtTime" TIMESTAMP NOT NULL DEFAULT NOW(),
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  fid VARCHAR(64) NOT NULL COMMENT '文件标识',
+  `textId` BIGINT NOT NULL COMMENT '文本标识',
+  part INT NOT NULL COMMENT '分段顺序',
+  `sourceText` TEXT COMMENT '原文',
+  `sourceTextHash` VARCHAR(64) COMMENT '原文哈希（SHA256）',
+  `translatedText` TEXT COMMENT '译文',
+  status SMALLINT NOT NULL DEFAULT 1 COMMENT '状态（1=新增,2=修改,3=已完成）',
+  `isClaimed` BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已认领',
+  `editCount` INT NOT NULL DEFAULT 0 COMMENT '编辑次数',
+  `uptTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近更新时间',
+  `crtTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
   CONSTRAINT chk_text_main_status CHECK (status IN (1, 2, 3))
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='主文本与翻译表';
 
-COMMENT ON TABLE text_main IS '主文本与翻译表';
-COMMENT ON COLUMN text_main.id IS '主键ID';
-COMMENT ON COLUMN text_main.fid IS '文件标识';
-COMMENT ON COLUMN text_main."textId" IS '文本标识';
-COMMENT ON COLUMN text_main.part IS '分段顺序';
-COMMENT ON COLUMN text_main."sourceText" IS '原文（允许为空）';
-COMMENT ON COLUMN text_main."sourceTextHash" IS '原文哈希（SHA256）';
-COMMENT ON COLUMN text_main."translatedText" IS '译文';
-COMMENT ON COLUMN text_main.status IS '文本状态（1=新增, 2=修改, 3=已完成）';
-COMMENT ON COLUMN text_main."isClaimed" IS '认领状态（false=未认领, true=已认领）';
-COMMENT ON COLUMN text_main."editCount" IS '变更次数';
-COMMENT ON COLUMN text_main."uptTime" IS '最近更新时间';
-COMMENT ON COLUMN text_main."crtTime" IS '创建时间';
 CREATE INDEX idx_text_main_fid ON text_main(fid);
 CREATE INDEX idx_text_main_fid_part ON text_main(fid, part);
-CREATE INDEX idx_text_main_text_id ON text_main("textId");
-CREATE INDEX idx_text_main_fid_text_id ON text_main(fid, "textId");
-CREATE INDEX idx_text_main_part1 ON text_main(fid) WHERE part = 1;
+CREATE INDEX idx_text_main_text_id ON text_main(`textId`);
+CREATE INDEX idx_text_main_fid_text_id ON text_main(fid, `textId`);
 CREATE INDEX idx_text_main_status ON text_main(status);
-CREATE INDEX idx_text_main_upt_time ON text_main("uptTime" DESC);
-CREATE INDEX idx_text_main_source_trgm ON text_main USING GIN ("sourceText" gin_trgm_ops);
-CREATE INDEX idx_text_main_trans_trgm ON text_main USING GIN ("translatedText" gin_trgm_ops);
+CREATE INDEX idx_text_main_upt_time ON text_main(`uptTime`);
 
--- text_claims
 CREATE TABLE text_claims (
-  id BIGSERIAL PRIMARY KEY,
-  "textId" BIGINT NOT NULL,
-  "userId" BIGINT NOT NULL,
-  "claimedAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE ("textId", "userId")
-);
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `textId` BIGINT NOT NULL COMMENT '文本ID',
+  `userId` BIGINT NOT NULL COMMENT '用户ID',
+  `claimedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '认领时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_text_claims_text_user (`textId`, `userId`),
+  KEY idx_text_claims_text_id (`textId`),
+  KEY idx_text_claims_user_id (`userId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文本认领记录表';
 
-COMMENT ON TABLE text_claims IS '文本认领记录表';
-COMMENT ON COLUMN text_claims.id IS '主键ID';
-COMMENT ON COLUMN text_claims."textId" IS '关联文本ID';
-COMMENT ON COLUMN text_claims."userId" IS '认领用户ID';
-COMMENT ON COLUMN text_claims."claimedAt" IS '认领时间';
-CREATE INDEX idx_text_claims_text_id ON text_claims("textId");
-CREATE INDEX idx_text_claims_user_id ON text_claims("userId");
-
--- text_locks
 CREATE TABLE text_locks (
-  id BIGSERIAL PRIMARY KEY,
-  "textId" BIGINT NOT NULL,
-  "userId" BIGINT NOT NULL,
-  "lockedAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "expiresAt" TIMESTAMP NOT NULL,
-  "releasedAt" TIMESTAMP
-);
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `textId` BIGINT NOT NULL COMMENT '文本ID',
+  `userId` BIGINT NOT NULL COMMENT '用户ID',
+  `lockedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '锁定时间',
+  `expiresAt` TIMESTAMP NOT NULL COMMENT '过期时间',
+  `releasedAt` TIMESTAMP NULL COMMENT '释放时间',
+  `activeLockTextId` BIGINT GENERATED ALWAYS AS (
+    CASE
+      WHEN `releasedAt` IS NULL THEN `textId`
+      ELSE NULL
+    END
+  ) STORED COMMENT '活跃锁文本ID（用于唯一约束）',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_text_locks_active (`activeLockTextId`),
+  KEY idx_text_locks_user_id (`userId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文本锁定表';
 
-COMMENT ON TABLE text_locks IS '文本锁定表';
-COMMENT ON COLUMN text_locks.id IS '主键ID';
-COMMENT ON COLUMN text_locks."textId" IS '关联文本ID';
-COMMENT ON COLUMN text_locks."userId" IS '锁定用户ID';
-COMMENT ON COLUMN text_locks."lockedAt" IS '锁定时间';
-COMMENT ON COLUMN text_locks."expiresAt" IS '过期时间';
-COMMENT ON COLUMN text_locks."releasedAt" IS '释放时间';
-CREATE UNIQUE INDEX uq_text_locks_active ON text_locks("textId") WHERE "releasedAt" IS NULL;
-CREATE INDEX idx_text_locks_user_id ON text_locks("userId");
-
--- text_changes
 CREATE TABLE text_changes (
-  id BIGSERIAL PRIMARY KEY,
-  "textId" BIGINT NOT NULL,
-  "userId" BIGINT NOT NULL,
-  "beforeText" TEXT NOT NULL,
-  "afterText" TEXT NOT NULL,
-  reason VARCHAR(255),
-  "changedAt" TIMESTAMP NOT NULL DEFAULT NOW()
-);
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `textId` BIGINT NOT NULL COMMENT '文本ID',
+  `userId` BIGINT NOT NULL COMMENT '用户ID',
+  `beforeText` TEXT NOT NULL COMMENT '变更前文本',
+  `afterText` TEXT NOT NULL COMMENT '变更后文本',
+  reason VARCHAR(255) COMMENT '变更原因',
+  `changedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '变更时间',
+  PRIMARY KEY (id),
+  KEY idx_text_changes_text_id (`textId`),
+  KEY idx_text_changes_changed_at (`changedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文本变更记录表';
 
-COMMENT ON TABLE text_changes IS '文本变更记录表';
-COMMENT ON COLUMN text_changes.id IS '主键ID';
-COMMENT ON COLUMN text_changes."textId" IS '关联文本ID';
-COMMENT ON COLUMN text_changes."userId" IS '操作用户ID';
-COMMENT ON COLUMN text_changes."beforeText" IS '变更前文本';
-COMMENT ON COLUMN text_changes."afterText" IS '变更后文本';
-COMMENT ON COLUMN text_changes.reason IS '变更原因';
-COMMENT ON COLUMN text_changes."changedAt" IS '变更时间';
-CREATE INDEX idx_text_changes_text_id ON text_changes("textId");
-CREATE INDEX idx_text_changes_changed_at ON text_changes("changedAt" DESC);
-
--- dictionary_entries
 CREATE TABLE dictionary_entries (
-  id BIGSERIAL PRIMARY KEY,
-  "termKey" VARCHAR(128) NOT NULL,
-  "termValue" VARCHAR(128) NOT NULL,
-  category VARCHAR(64),
-  "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
-  "crtTime" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "uptTime" TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-COMMENT ON TABLE dictionary_entries IS '词典条目表';
-COMMENT ON COLUMN dictionary_entries.id IS '主键ID';
-COMMENT ON COLUMN dictionary_entries."termKey" IS '词条Key';
-COMMENT ON COLUMN dictionary_entries."termValue" IS '词条Value';
-COMMENT ON COLUMN dictionary_entries.category IS '分类';
-COMMENT ON COLUMN dictionary_entries."isActive" IS '是否启用';
-COMMENT ON COLUMN dictionary_entries."crtTime" IS '创建时间';
-COMMENT ON COLUMN dictionary_entries."uptTime" IS '更新时间';
-CREATE INDEX idx_dictionary_key ON dictionary_entries("termKey");
-CREATE INDEX idx_dictionary_value ON dictionary_entries("termValue");
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `termKey` VARCHAR(128) NOT NULL COMMENT '词条Key',
+  `termValue` VARCHAR(128) NOT NULL COMMENT '词条Value',
+  category VARCHAR(64) COMMENT '分类',
+  `isActive` BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否启用',
+  `crtTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `uptTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  KEY idx_dictionary_key (`termKey`),
+  KEY idx_dictionary_value (`termValue`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='词典条目表';

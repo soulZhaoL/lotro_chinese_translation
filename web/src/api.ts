@@ -44,7 +44,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  if (!headers.has("Content-Type") && options.body) {
+  const isFormDataBody = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (!headers.has("Content-Type") && options.body && !isFormDataBody) {
     headers.set("Content-Type", "application/json");
   }
 
