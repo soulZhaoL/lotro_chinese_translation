@@ -1,73 +1,10 @@
 import type { ProColumns } from "@ant-design/pro-components";
-import { Button, Input, Popconfirm, Popover, Space, Table, Tag, Typography, message } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { type Dispatch, type SetStateAction } from "react";
+import { Button, Popconfirm, Popover, Space, Tag, Typography, message } from "antd";
 
-import { apiFetch, getErrorMessage } from "../../../../api";
-import { formatDateTime } from "../../../../utils/datetime";
-
-export interface TextItem {
-  id: number;
-  fid: string;
-  textId: number;
-  part: number;
-  sourceText: string | null;
-  translatedText: string | null;
-  status: number;
-  editCount: number;
-  uptTime: string;
-  crtTime: string;
-  claimId: number | null;
-  claimedBy: string | null;
-  claimedAt: string | null;
-  isClaimed: boolean;
-}
-
-export interface TextListResponse {
-  items: TextItem[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export interface QueryParams {
-  fid?: string;
-  status?: number | string;
-  sourceKeyword?: string;
-  translatedKeyword?: string;
-  updatedFrom?: string;
-  updatedTo?: string;
-  claimer?: string;
-  claimed?: string | boolean;
-}
-
-export type ChildQuery = {
-  page: number;
-  pageSize: number;
-  textId?: string;
-};
-
-export type ChildState = ChildQuery & {
-  items: TextItem[];
-  total: number;
-  loading: boolean;
-};
-
-export type ListStateSnapshot = {
-  search: QueryParams;
-  page: number;
-  pageSize: number;
-  expandedRowKeys: Array<string | number>;
-  childQueries: Record<string, ChildQuery>;
-};
-
-export type ActiveConfirmState = { type: "claim" | "release"; id: number } | null;
-
-const statusMeta: Record<number, { label: string; color: string }> = {
-  1: { label: "新增", color: "default" },
-  2: { label: "修改", color: "processing" },
-  3: { label: "已完成", color: "success" },
-};
+import { apiFetch, getErrorMessage } from "../../../api";
+import { formatDateTime } from "../../../utils/datetime";
+import { TEXT_STATUS_META, TEXT_STATUS_VALUE_ENUM } from "../constants";
+import type { ActiveConfirmState, TextItem } from "../types";
 
 const DISPLAY_LIMIT = 200;
 const TOOLTIP_LIMIT = 5000;
@@ -319,12 +256,6 @@ type ParentColumnsDeps = CommonActionDeps & {
   onParentChanged: () => void;
 };
 
-type ChildColumnsDeps = CommonActionDeps & {
-  sourceKeyword?: string;
-  translatedKeyword?: string;
-  onChildChanged: (fid: string) => void;
-};
-
 export function createParentColumns({
   claimingId,
   releasingId,
@@ -375,7 +306,7 @@ export function createParentColumns({
       dataIndex: "status",
       hideInSearch: true,
       render: (_, record) => {
-        const meta = statusMeta[record.status];
+        const meta = TEXT_STATUS_META[record.status];
         return <Tag color={meta?.color || "default"}>{meta?.label || "-"}</Tag>;
       },
     },
@@ -411,11 +342,7 @@ export function createParentColumns({
       title: "状态",
       dataIndex: "status",
       hideInTable: true,
-      valueEnum: {
-        1: { text: "新增" },
-        2: { text: "修改" },
-        3: { text: "已完成" },
-      },
+      valueEnum: TEXT_STATUS_VALUE_ENUM,
     },
     { title: "原文关键字", dataIndex: "sourceKeyword", hideInTable: true },
     { title: "汉化关键字", dataIndex: "translatedKeyword", hideInTable: true },
@@ -443,186 +370,4 @@ export function createParentColumns({
       hideInTable: true,
     },
   ];
-}
-
-export function createChildColumns({
-  claimingId,
-  releasingId,
-  activeConfirm,
-  setClaimingId,
-  setReleasingId,
-  setActiveConfirm,
-  navigateWithState,
-  sourceKeyword,
-  translatedKeyword,
-  onChildChanged,
-}: ChildColumnsDeps): ColumnsType<TextItem> {
-  return [
-    {
-      title: "TextId",
-      dataIndex: "textId",
-      width: 120,
-      render: (_, record) => (
-        <Typography.Link
-          copyable={{ text: String(record.textId) }}
-          onClick={(event) => {
-            const target = event.target as HTMLElement;
-            if (target.closest("button.ant-typography-copy")) {
-              return;
-            }
-            event.preventDefault();
-            navigateWithState(`/texts/${record.fid}/${record.textId}`);
-          }}
-        >
-          {record.textId}
-        </Typography.Link>
-      ),
-    },
-    { title: "Part", dataIndex: "part", width: 80 },
-    {
-      title: "原文",
-      dataIndex: "sourceText",
-      width: 400,
-      render: (_, record) => renderLongText(record.sourceText, sourceKeyword),
-    },
-    {
-      title: "译文",
-      dataIndex: "translatedText",
-      width: 400,
-      render: (_, record) => renderLongText(record.translatedText, translatedKeyword),
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      width: 90,
-      render: (_, record) => {
-        const meta = statusMeta[record.status];
-        return <Tag color={meta?.color || "default"}>{meta?.label || "-"}</Tag>;
-      },
-    },
-    {
-      title: "认领人",
-      dataIndex: "claimedBy",
-      width: 120,
-      render: (_, record) => record.claimedBy || "-",
-    },
-    {
-      title: "更新时间",
-      dataIndex: "uptTime",
-      render: (_, record) => formatDateTime(record.uptTime),
-    },
-    {
-      title: "操作",
-      key: "action",
-      width: 168,
-      render: (_, record) => (
-        <TextRowActions
-          record={record}
-          claimingId={claimingId}
-          releasingId={releasingId}
-          activeConfirm={activeConfirm}
-          setClaimingId={setClaimingId}
-          setReleasingId={setReleasingId}
-          setActiveConfirm={setActiveConfirm}
-          navigateWithState={navigateWithState}
-          onChanged={() => onChildChanged(record.fid)}
-          releaseLoading
-          size={4}
-        />
-      ),
-    },
-  ];
-}
-
-export function createEmptyChildState(page = 1, pageSize = 10): ChildState {
-  return {
-    items: [],
-    total: 0,
-    page,
-    pageSize,
-    textId: undefined,
-    loading: false,
-  };
-}
-
-type ChildTablePanelProps = {
-  parent: TextItem;
-  state: ChildState;
-  childColumns: ColumnsType<TextItem>;
-  fetchChildren: (fid: string, overrides?: Partial<ChildQuery>) => void;
-  setChildStates: Dispatch<SetStateAction<Record<string, ChildState>>>;
-  handleChildSearch: (fid: string, value: string) => void;
-};
-
-export function ChildTablePanel({
-  parent,
-  state,
-  childColumns,
-  fetchChildren,
-  setChildStates,
-  handleChildSearch,
-}: ChildTablePanelProps) {
-  return (
-    <div
-      style={{
-        padding: 12,
-        background: "#fafafa",
-        border: "1px solid #f0f0f0",
-        borderLeft: "3px solid #1677ff",
-        borderRadius: 8,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-        margin: "8px 0",
-      }}
-    >
-      <Space style={{ marginBottom: 8 }}>
-        <Input.Search
-          placeholder="textId"
-          allowClear
-          value={state.textId ?? ""}
-          onChange={(event) => {
-            const value = event.target.value;
-            setChildStates((prev) => ({
-              ...prev,
-              [parent.fid]: {
-                ...(prev[parent.fid] || state),
-                textId: value,
-              },
-            }));
-          }}
-          onSearch={(value) => handleChildSearch(parent.fid, value)}
-          style={{ width: 200 }}
-        />
-        <Button
-          onClick={() => {
-            setChildStates((prev) => ({
-              ...prev,
-              [parent.fid]: {
-                ...(prev[parent.fid] || state),
-                textId: undefined,
-              },
-            }));
-            fetchChildren(parent.fid, { page: 1, textId: undefined });
-          }}
-        >
-          重置
-        </Button>
-      </Space>
-      <Table
-        rowKey="id"
-        size="small"
-        columns={childColumns}
-        dataSource={state.items}
-        loading={state.loading}
-        pagination={{
-          current: state.page,
-          pageSize: state.pageSize,
-          total: state.total,
-          showSizeChanger: true,
-          onChange: (page, pageSize) => {
-            fetchChildren(parent.fid, { page, pageSize });
-          },
-        }}
-      />
-    </div>
-  );
 }

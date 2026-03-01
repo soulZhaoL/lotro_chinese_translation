@@ -3,47 +3,15 @@ import { Button, Card, Input, Row, Col, Switch, Typography, message } from "antd
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { apiFetch, getErrorMessage } from "../../../../api";
-
-interface TextDetailResponse {
-  text: {
-    id: number;
-    fid: string;
-    textId: number;
-    part: number;
-    sourceText: string | null;
-    translatedText: string | null;
-    status: number;
-  };
-}
-
-type ListStateSnapshot = {
-  search: Record<string, unknown>;
-  page: number;
-  pageSize: number;
-  expandedRowKeys: Array<string | number>;
-  childQueries: Record<string, { page: number; pageSize: number; textId?: string }>;
-};
-
-const STORAGE_KEY = "texts_list_state";
-
-function getStoredListState(): ListStateSnapshot | null {
-  const raw = sessionStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw) as ListStateSnapshot;
-  } catch {
-    return null;
-  }
-}
+import { apiFetch, getErrorMessage } from "../../../api";
+import { parseStoredListState } from "../storage";
+import type { ListStateSnapshot, TextDetailByTextIdResponse } from "../types";
 
 export default function TextEdit() {
   const params = useParams();
   const fid = params.fid || "";
   const textId = Number(params.textId);
-  const [detail, setDetail] = useState<TextDetailResponse | null>(null);
+  const [detail, setDetail] = useState<TextDetailByTextIdResponse | null>(null);
   const [translated, setTranslated] = useState("");
   const [reason, setReason] = useState("");
   const [markCompleted, setMarkCompleted] = useState(false);
@@ -53,13 +21,13 @@ export default function TextEdit() {
 
   const listState = useMemo(() => {
     const state = location.state as { listState?: ListStateSnapshot } | null;
-    return state?.listState || getStoredListState();
+    return state?.listState || parseStoredListState();
   }, [location.state]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await apiFetch<TextDetailResponse>(
+        const response = await apiFetch<TextDetailByTextIdResponse>(
           `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
         );
         setDetail(response);

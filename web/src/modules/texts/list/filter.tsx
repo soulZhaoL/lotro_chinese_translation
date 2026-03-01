@@ -1,10 +1,10 @@
 import type { ProFormInstance } from "@ant-design/pro-form";
-import { Button, Space, message } from "antd";
-import type { ReactNode } from "react";
+import { Button, Space } from "antd";
+import type { MutableRefObject, ReactNode } from "react";
 
-import { getToken } from "../../../../api";
-import { getAppConfig } from "../../../../config";
-import type { QueryParams } from "./table";
+import { getToken } from "../../../api";
+import { getAppConfig } from "../../../config";
+import type { QueryParams } from "../types";
 
 function normalizeString(value: unknown): string | undefined {
   if (typeof value !== "string") {
@@ -108,7 +108,7 @@ export function buildDownloadQuery(params: QueryParams): URLSearchParams {
 }
 
 export function resolveSearchParams(
-  formRef: React.MutableRefObject<ProFormInstance<QueryParams> | undefined>,
+  formRef: MutableRefObject<ProFormInstance<QueryParams> | undefined>,
   parentSearch: QueryParams
 ): QueryParams {
   const formValues = formRef.current?.getFieldsValue?.() || {};
@@ -140,11 +140,12 @@ function parseContentDispositionFileName(contentDisposition: string | null, fall
   return fallbackName;
 }
 
-async function downloadByPath(path: string, fallbackName: string) {
+export type DownloadFileResult = "downloaded" | "mock_unsupported";
+
+async function downloadByPath(path: string, fallbackName: string): Promise<DownloadFileResult> {
   const config = getAppConfig();
   if (config.useMock) {
-    message.warning("Mock 模式不支持该下载操作");
-    return;
+    return "mock_unsupported";
   }
   const apiBase = config.apiBaseUrl;
   if (!apiBase) {
@@ -185,15 +186,16 @@ async function downloadByPath(path: string, fallbackName: string) {
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(objectUrl);
+  return "downloaded";
 }
 
-export async function downloadTemplateFile() {
-  await downloadByPath("/texts/template", "text_template.xlsx");
+export async function downloadTemplateFile(): Promise<DownloadFileResult> {
+  return downloadByPath("/texts/template", "text_template.xlsx");
 }
 
-export async function downloadFilteredFile(search: QueryParams) {
+export async function downloadFilteredFile(search: QueryParams): Promise<DownloadFileResult> {
   const query = buildDownloadQuery(search);
-  await downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx");
+  return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx");
 }
 
 type SearchActionBarProps = {

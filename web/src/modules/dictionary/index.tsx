@@ -3,37 +3,10 @@ import { Button, Form, Input, Modal, Select, Table, Typography, message } from "
 import { ColumnsType } from "antd/es/table";
 import { useEffect, useState } from "react";
 
-import { apiFetch, getErrorMessage } from "../../../api";
-import { formatDateTime } from "../../../utils/datetime";
-
-interface DictionaryItem {
-  id: number;
-  termKey: string;
-  termValue: string;
-  category: string | null;
-  isActive: boolean;
-  uptTime: string;
-}
-
-interface DictionaryResponse {
-  items: DictionaryItem[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  skill: "技能",
-  race: "种族",
-  place: "地点",
-  item: "物品",
-  quest: "任务",
-};
-
-const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+import { apiFetch, getErrorMessage } from "../../api";
+import { formatDateTime } from "../../utils/datetime";
+import { CATEGORY_LABELS, CATEGORY_OPTIONS } from "./constants";
+import type { DictionaryFilters, DictionaryItem, DictionaryResponse } from "./types";
 
 export default function Dictionary() {
   const [filterForm] = Form.useForm();
@@ -44,7 +17,7 @@ export default function Dictionary() {
   const [filtering, setFiltering] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const fetchData = async (filters?: { termKey?: string; termValue?: string; category?: string }) => {
+  const fetchData = async (filters?: DictionaryFilters) => {
     setLoading(true);
     try {
       const query = new URLSearchParams();

@@ -3,42 +3,21 @@ import { Descriptions, Input, Row, Col, Tag, Typography, message } from "antd";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { apiFetch, getErrorMessage } from "../../../../api";
-import { formatDateTime } from "../../../../utils/datetime";
-
-interface TextDetailResponse {
-  text: {
-    id: number;
-    fid: string;
-    textId: number;
-    part: number;
-    sourceText: string | null;
-    translatedText: string | null;
-    status: number;
-    editCount: number;
-    uptTime: string;
-    crtTime: string;
-  };
-  claims: Array<{ id: number; userId: number; claimedAt: string }>;
-  locks: Array<{ id: number; userId: number; lockedAt: string; expiresAt: string; releasedAt: string | null }>;
-}
-
-const statusMeta: Record<number, { label: string; color: string }> = {
-  1: { label: "新增", color: "default" },
-  2: { label: "修改", color: "processing" },
-  3: { label: "已完成", color: "success" },
-};
+import { apiFetch, getErrorMessage } from "../../../api";
+import { formatDateTime } from "../../../utils/datetime";
+import { TEXT_STATUS_META } from "../constants";
+import type { TextDetailByTextIdResponse } from "../types";
 
 export default function TextDetail() {
   const params = useParams();
   const fid = params.fid || "";
   const textId = Number(params.textId);
-  const [detail, setDetail] = useState<TextDetailResponse | null>(null);
+  const [detail, setDetail] = useState<TextDetailByTextIdResponse | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await apiFetch<TextDetailResponse>(
+        const response = await apiFetch<TextDetailByTextIdResponse>(
           `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
         );
         setDetail(response);
@@ -62,8 +41,8 @@ export default function TextDetail() {
         <Descriptions.Item label="TextId">{detail.text.textId}</Descriptions.Item>
         <Descriptions.Item label="Part">{detail.text.part}</Descriptions.Item>
         <Descriptions.Item label="状态">
-          <Tag color={statusMeta[detail.text.status]?.color || "default"}>
-            {statusMeta[detail.text.status]?.label || "-"}
+          <Tag color={TEXT_STATUS_META[detail.text.status]?.color || "default"}>
+            {TEXT_STATUS_META[detail.text.status]?.label || "-"}
           </Tag>
         </Descriptions.Item>
         <Descriptions.Item label="更新时间">{formatDateTime(detail.text.uptTime)}</Descriptions.Item>

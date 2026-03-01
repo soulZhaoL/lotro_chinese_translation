@@ -49,10 +49,19 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${apiBase}${path}`, {
-    ...options,
-    headers,
-  });
+  const requestUrl = `${apiBase}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`无法连接后端服务: ${apiBase}`);
+    }
+    throw error;
+  }
 
   let payload: any = null;
   try {

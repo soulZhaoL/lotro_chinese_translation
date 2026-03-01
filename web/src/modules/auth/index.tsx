@@ -2,24 +2,10 @@
 import { Button, Card, Form, Input, Typography, message } from "antd";
 import { useState } from "react";
 
-import { apiFetch, getErrorMessage, setToken, setUserName } from "../../../api";
+import { apiFetch, getErrorMessage, setToken, setUserName } from "../../api";
+import type { LoginProps, LoginResponse } from "./types";
 
 const { Title } = Typography;
-
-interface LoginResponse {
-  token: string;
-  user: {
-    id: number;
-    username: string;
-    isGuest: boolean;
-  };
-  roles: string[];
-  permissions: string[];
-}
-
-interface LoginProps {
-  onLogin: () => void;
-}
 
 export default function Login({ onLogin }: LoginProps) {
   const [form] = Form.useForm();

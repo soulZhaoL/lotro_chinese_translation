@@ -4,28 +4,9 @@ import { ColumnsType } from "antd/es/table";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { apiFetch, getErrorMessage } from "../../../../api";
-import { formatDateTime } from "../../../../utils/datetime";
-
-interface ChangeItem {
-  id: number;
-  textId: number;
-  userId: number;
-  beforeText: string;
-  afterText: string;
-  reason: string | null;
-  changedAt: string;
-}
-
-interface ChangesResponse {
-  items: ChangeItem[];
-}
-
-interface TextDetailResponse {
-  text: {
-    id: number;
-  };
-}
+import { apiFetch, getErrorMessage } from "../../../api";
+import { formatDateTime } from "../../../utils/datetime";
+import type { ChangeItem, ChangesResponse, TextIdOnlyResponse } from "../types";
 
 export default function TextChanges() {
   const params = useParams();
@@ -38,7 +19,7 @@ export default function TextChanges() {
     const load = async () => {
       setLoading(true);
       try {
-        const detail = await apiFetch<TextDetailResponse>(
+        const detail = await apiFetch<TextIdOnlyResponse>(
           `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
         );
         const response = await apiFetch<ChangesResponse>(`/changes?textId=${detail.text.id}`);

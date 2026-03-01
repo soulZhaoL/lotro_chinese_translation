@@ -5,20 +5,23 @@ import type { ProFormInstance } from "@ant-design/pro-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { getErrorMessage, getToken } from "../../../../api";
-import { getAppConfig } from "../../../../config";
+import { getErrorMessage, getToken } from "../../../api";
+import { getAppConfig } from "../../../config";
+import { parseStoredListState, saveListState } from "../storage";
+import type {
+  ActiveConfirmState,
+  ChildQuery,
+  ChildState,
+  ListStateSnapshot,
+  QueryParams,
+  TextItem,
+  TextListResponse,
+} from "../types";
 import {
   ChildTablePanel,
   createChildColumns,
   createEmptyChildState,
   createParentColumns,
-  type ActiveConfirmState,
-  type ChildQuery,
-  type ChildState,
-  type ListStateSnapshot,
-  type QueryParams,
-  type TextItem,
-  type TextListResponse,
 } from "./table";
 import {
   SearchActionBar,
@@ -28,20 +31,6 @@ import {
   normalizeQueryParams,
   resolveSearchParams,
 } from "./filter";
-
-const STORAGE_KEY = "texts_list_state";
-
-function parseStoredState(): ListStateSnapshot | null {
-  const raw = sessionStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw) as ListStateSnapshot;
-  } catch {
-    return null;
-  }
-}
 
 export default function TextsList() {
   const navigate = useNavigate();
@@ -91,7 +80,7 @@ export default function TextsList() {
   }, [childStates, expandedRowKeys, parentPage, parentPageSize, parentSearch]);
 
   const persistListState = useCallback((snapshot: ListStateSnapshot) => {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    saveListState(snapshot);
   }, []);
 
   useEffect(() => {
@@ -184,7 +173,7 @@ export default function TextsList() {
 
   useEffect(() => {
     const state = location.state as { listState?: ListStateSnapshot; refresh?: boolean } | null;
-    const stored = state?.listState || parseStoredState();
+    const stored = state?.listState || parseStoredListState();
 
     if (stored) {
       const restoredExpandedKeys = stored.expandedRowKeys || [];
@@ -246,7 +235,11 @@ export default function TextsList() {
 
   const handleDownloadTemplate = useCallback(async () => {
     try {
-      await downloadTemplateFile();
+      const result = await downloadTemplateFile();
+      if (result === "mock_unsupported") {
+        message.warning("Mock 模式不支持模板下载");
+        return;
+      }
       message.success("模板下载成功");
     } catch (error) {
       message.error(getErrorMessage(error, "模板下载失败"));
@@ -260,7 +253,11 @@ export default function TextsList() {
       return;
     }
     try {
-      await downloadFilteredFile(currentSearch);
+      const result = await downloadFilteredFile(currentSearch);
+      if (result === "mock_unsupported") {
+        message.warning("Mock 模式不支持导出筛选结果");
+        return;
+      }
       message.success("导出成功");
     } catch (error) {
       message.error(getErrorMessage(error, "导出失败"));
@@ -408,7 +405,7 @@ export default function TextsList() {
 
       <ProTable<TextItem, QueryParams>
         rowKey="fid"
-        headerTitle="主文本列表"
+        headerTitle="父级主文本列表（part=1）"
         actionRef={actionRef}
         formRef={formRef}
         size="small"
@@ -446,6 +443,7 @@ export default function TextsList() {
         pagination={{
           current: parentPage,
           pageSize: parentPageSize,
+          showTotal: (total) => `父级主文本共 ${total} 条（统计口径：part=1）`,
           showSizeChanger: true,
           onChange: (page, pageSize) => {
             setParentPage(page);

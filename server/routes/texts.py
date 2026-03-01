@@ -210,8 +210,18 @@ def list_texts(
     pageSize: Optional[int] = Query(default=None, alias="pageSize"),
     _: Dict[str, Any] = Depends(require_auth),
 ):
-    """获取父级主文本列表（仅 part=1），支持筛选与分页。"""
-    return list_parent_texts(
+    """获取平铺主文本列表（全量 part），支持筛选与分页。"""
+    config = get_config()
+    pagination = config["pagination"]
+    default_page_size = pagination["default_page_size"]
+    max_page_size = pagination["max_page_size"]
+
+    effective_page_size = pageSize if pageSize is not None else default_page_size
+    if effective_page_size > max_page_size:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 超出最大限制")
+
+    offset = _apply_pagination(page, effective_page_size)
+    conditions, params = _build_download_conditions(
         fid=fid,
         status_filter=status_filter,
         sourceKeyword=sourceKeyword,
@@ -220,9 +230,86 @@ def list_texts(
         updatedTo=updatedTo,
         claimer=claimer,
         claimed=claimed,
-        page=page,
-        pageSize=pageSize,
-        _=_,
+    )
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    max_text_length = config["text_list"]["max_text_length"]
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM text_main tm
+            {where_clause}
+            """,
+            tuple(params),
+        )
+        total = cursor.fetchone()["total"]
+
+        cursor.execute(
+            f"""
+            SELECT
+              tm.id,
+              tm.fid,
+              tm."textId" AS "textId",
+              tm.part,
+              CASE
+                WHEN length(tm."sourceText") > %s THEN CONCAT(SUBSTRING(tm."sourceText", 1, %s), '...')
+                ELSE tm."sourceText"
+              END AS "sourceText",
+              CASE
+                WHEN tm."translatedText" IS NOT NULL AND length(tm."translatedText") > %s
+                  THEN CONCAT(SUBSTRING(tm."translatedText", 1, %s), '...')
+                ELSE tm."translatedText"
+              END AS "translatedText",
+              tm.status,
+              tm."editCount" AS "editCount",
+              tm."uptTime" AS "uptTime",
+              tm."crtTime" AS "crtTime",
+              (
+                SELECT c.id
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimId",
+              (
+                SELECT u.username
+                FROM text_claims c
+                JOIN users u ON u.id = c."userId"
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimedBy",
+              (
+                SELECT c."claimedAt"
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+                ORDER BY c."claimedAt" DESC, c.id DESC
+                LIMIT 1
+              ) AS "claimedAt",
+              EXISTS (
+                SELECT 1
+                FROM text_claims c
+                WHERE c."textId" = tm.id
+              ) AS "isClaimed"
+            FROM text_main tm
+            {where_clause}
+            ORDER BY tm."uptTime" DESC, tm.id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple([max_text_length, max_text_length, max_text_length, max_text_length] + params + [effective_page_size, offset]),
+        )
+        items = cursor.fetchall()
+        for item in items:
+            item["isClaimed"] = bool(item["isClaimed"])
+
+    return success_response(
+        {
+            "items": items,
+            "total": total,
+            "page": page,
+            "pageSize": effective_page_size,
+        }
     )
 
 

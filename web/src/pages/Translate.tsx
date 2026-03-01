@@ -4,24 +4,12 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { apiFetch, getErrorMessage } from "../api";
-
-interface TextDetail {
-  text: {
-    id: number;
-    fid: string;
-    part: string;
-    sourceText: string | null;
-    translatedText: string | null;
-    status: number;
-  };
-  claims: Array<{ id: number; userId: number; claimedAt: string }>;
-  locks: Array<{ id: number; userId: number; lockedAt: string; expiresAt: string; releasedAt: string | null }>;
-}
+import type { TranslateTextDetail } from "./types";
 
 export default function Translate() {
   const params = useParams();
   const textId = Number(params.id);
-  const [detail, setDetail] = useState<TextDetail | null>(null);
+  const [detail, setDetail] = useState<TranslateTextDetail | null>(null);
   const [lockId, setLockId] = useState<number | null>(null);
   const [translated, setTranslated] = useState("");
   const [locking, setLocking] = useState(false);
@@ -29,7 +17,7 @@ export default function Translate() {
 
   useEffect(() => {
     const load = async () => {
-      const response = await apiFetch<TextDetail>(`/texts/${textId}`);
+      const response = await apiFetch<TranslateTextDetail>(`/texts/${textId}`);
       setDetail(response);
       setTranslated(response.text.translatedText || "");
     };

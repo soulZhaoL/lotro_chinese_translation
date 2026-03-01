@@ -1,9 +1,6 @@
 // 维护模式页面。
 import { Button, Result, Typography } from "antd";
-
-type MaintenanceProps = {
-  message?: string;
-};
+import type { MaintenanceProps } from "./types";
 
 export default function Maintenance({ message }: MaintenanceProps) {
   const description = message?.trim() || "系统维护中，请稍后再试";
