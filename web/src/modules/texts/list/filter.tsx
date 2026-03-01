@@ -227,10 +227,10 @@ export function SearchActionBar({
         {dom}
       </Space>
       <Space wrap size={8}>
-        <Button onClick={onDownloadFiltered}>导出筛选结果</Button>
+        <Button onClick={onDownloadFiltered}>导出</Button>
         <Button onClick={onDownloadTemplate}>下载模板</Button>
         <Button type="primary" loading={uploading} onClick={onUpload}>
-          上传结果
+          上传译文
         </Button>
       </Space>
     </div>
