@@ -9,7 +9,8 @@
 - 以附件形式返回文件，供翻译人员线下编辑。
 
 2. `POST /texts/upload`
-- 使用 `multipart/form-data` 上传 xlsx 文件。
+- 使用二进制请求体上传 xlsx 文件（`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`）。
+- 通过 query 参数传递 `fileName`（必填）与 `reason`（可选）。
 - 校验项:
   - 文件扩展名必须为 `.xlsx`
   - 工作表存在且表头严格匹配模板列顺序
@@ -35,7 +36,7 @@
 1. 文本列表页新增“下载模板”按钮，调用下载接口并触发浏览器保存。
 2. 新增“上传结果”按钮与隐藏文件选择器，限制 `.xlsx`。
 3. 上传成功后提示并刷新列表；失败展示后端错误信息。
-4. 调整 `apiFetch`，`FormData` 请求不自动设置 `Content-Type: application/json`。
+4. 上传请求使用 `fetch` 发送二进制 body，避免 `multipart` 依赖导致后端启动前置校验失败。
 
 ## 安全与性能
 - 安全:
@@ -50,3 +51,4 @@
 2. 上传成功测试: 校验 text_main 变更与 text_changes 记录。
 3. 上传失败测试: 编号/FID/TextId/Part 不匹配时报错且数据不变。
 4. 运行文本模块相关 pytest 回归。
+5. 增加 pytest 分层：纯逻辑测试默认可运行；数据库集成测试通过 `--run-db-tests` 显式启用。

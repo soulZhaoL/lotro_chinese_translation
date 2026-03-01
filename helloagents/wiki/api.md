@@ -226,6 +226,32 @@
 { "id": 1 }
 ```
 
+#### [GET] /texts/download
+**描述:** 按固定模板下载文本数据（离线翻译用）
+
+**响应:** xlsx 文件，表头固定顺序为：
+- `编号`、`FID`、`TextId`、`Part`、`原文`、`译文`、`状态`
+
+#### [POST] /texts/upload?fileName=xxx.xlsx&reason=...
+**描述:** 按模板上传离线翻译结果，严格校验后批量覆盖译文与状态
+
+**请求头:**
+- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+
+**请求体:**
+- xlsx 二进制内容（首个工作表）
+
+**校验规则:**
+- 仅允许 `.xlsx`
+- 表头必须与模板完全一致
+- 根据 `编号` 定位记录，并校验 `编号/FID/TextId/Part` 与数据库一致
+- 任一行校验失败则整批失败（事务回滚）
+
+**响应:**
+```json
+{ "updatedCount": 10 }
+```
+
 ---
 
 ### 健康检查

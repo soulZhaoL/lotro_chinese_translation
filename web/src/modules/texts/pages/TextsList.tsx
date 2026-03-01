@@ -8,7 +8,8 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { apiFetch, getErrorMessage } from "../../../api";
+import { apiFetch, getErrorMessage, getToken } from "../../../api";
+import { getAppConfig } from "../../../config";
 import { formatDateTime } from "../../../utils/datetime";
 
 interface TextItem {
@@ -179,6 +180,8 @@ export default function TextsList() {
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
   const [childStates, setChildStates] = useState<Record<string, ChildState>>({});
   const [pageFids, setPageFids] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const childStatesRef = useRef<Record<string, ChildState>>({});
   const parentSearchRef = useRef<QueryParams>({});
 
@@ -349,6 +352,113 @@ export default function TextsList() {
   );
 
   const keywordActive = Boolean(parentSearch.sourceKeyword || parentSearch.translatedKeyword);
+
+  const handleDownloadTemplate = useCallback(async () => {
+    try {
+      const config = getAppConfig();
+      if (config.useMock) {
+        message.warning("Mock 模式不支持模板下载");
+        return;
+      }
+      const apiBase = config.useMock ? "/api" : config.apiBaseUrl;
+      if (!apiBase) {
+        throw new Error("缺少 apiBaseUrl");
+      }
+      const token = getToken();
+      if (!token) {
+        throw new Error("未登录或登录已失效");
+      }
+      const response = await fetch(`${apiBase}/texts/download`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        let errorMessage = "下载失败";
+        try {
+          const payload = await response.json();
+          if (payload && typeof payload.message === "string") {
+            errorMessage = payload.message;
+          }
+        } catch {
+          errorMessage = "下载失败";
+        }
+        throw new Error(errorMessage);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = "text_template.xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      message.success("下载成功");
+    } catch (error) {
+      message.error(getErrorMessage(error, "下载失败"));
+    }
+  }, []);
+
+  const handleUploadFile = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFile = event.target.files?.[0];
+      event.target.value = "";
+      if (!selectedFile) {
+        return;
+      }
+      if (!selectedFile.name.toLowerCase().endsWith(".xlsx")) {
+        message.error("仅支持上传 .xlsx 文件");
+        return;
+      }
+
+      try {
+        setUploading(true);
+        const config = getAppConfig();
+        if (config.useMock) {
+          message.warning("Mock 模式不支持模板上传");
+          return;
+        }
+        const apiBase = config.useMock ? "/api" : config.apiBaseUrl;
+        if (!apiBase) {
+          throw new Error("缺少 apiBaseUrl");
+        }
+        const token = getToken();
+        if (!token) {
+          throw new Error("未登录或登录已失效");
+        }
+
+        const query = new URLSearchParams();
+        query.set("fileName", selectedFile.name);
+        query.set("reason", "模板批量上传");
+
+        const response = await fetch(`${apiBase}/texts/upload?${query.toString()}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          },
+          body: selectedFile,
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload?.success || payload?.code !== "0000") {
+          throw new Error(payload?.message || "上传失败");
+        }
+
+        message.success(`上传成功，更新 ${payload.data.updatedCount} 条`);
+        setExpandedRowKeys([]);
+        setChildStates({});
+        actionRef.current?.reload();
+      } catch (error) {
+        message.error(getErrorMessage(error, "上传失败"));
+      } finally {
+        setUploading(false);
+      }
+    },
+    []
+  );
 
   const expandFirstOnPage = useCallback(() => {
     const first = pageFids[0];
@@ -889,7 +999,19 @@ export default function TextsList() {
         cardBordered
         options={false}
         search={{ labelWidth: "auto" }}
-        toolBarRender={false}
+        toolBarRender={() => [
+          <Button key="download-template" onClick={() => void handleDownloadTemplate()}>
+            下载模板
+          </Button>,
+          <Button
+            key="upload-result"
+            type="primary"
+            loading={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            上传结果
+          </Button>,
+        ]}
         loading={queryLoading}
         params={parentSearch}
         onSubmit={(params) => {
@@ -959,6 +1081,13 @@ export default function TextsList() {
           expandedRowRender: (record) => renderChildTable(record),
         }}
         columns={columns}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx"
+        style={{ display: "none" }}
+        onChange={(event) => void handleUploadFile(event)}
       />
     </>
   );

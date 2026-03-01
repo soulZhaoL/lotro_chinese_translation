@@ -44,6 +44,16 @@
 **输入:** translatedText, reason
 **输出:** 更新结果
 
+### [GET] /texts/download
+**描述:** 下载离线翻译模板（xlsx）
+**输入:** 无
+**输出:** 固定列顺序的模板文件（编号/FID/TextId/Part/原文/译文/状态）
+
+### [POST] /texts/upload
+**描述:** 上传离线翻译结果并批量更新
+**输入:** `fileName`（query）、可选 `reason`（query）、xlsx 二进制 body
+**输出:** 更新数量 `updatedCount`
+
 ### [DELETE] /claims/{claimId}
 **描述:** 释放认领
 **输入:** claimId
@@ -84,8 +94,10 @@
 - 列表接口对 sourceText/translatedText 超长内容截断（配置 `text_list.max_text_length`）
 - 数据库编码需为 UTF8，以兼容稀有符号与带音节字符
 - 提供 xlsx 批量导入脚本 `tools/valid_format/xlsx_to_insert.py`（按行范围与分块生成 INSERT） 
+- 新增模板化下载/上传闭环：上传按 `编号` 定位并强校验 `FID/TextId/Part`，失败即整批回滚，成功后统一写入 `text_changes`
 
 ## 变更历史
 - 2026-01-31：列表字段补全与长文本展示
 - 2026-02-08：textId 拆分、父/子列表与 fid+textId 查询
 - 2026-02-11：数据库与 API 字段统一 camelCase
+- 2026-03-01：新增文本模板下载/上传（离线翻译回传）

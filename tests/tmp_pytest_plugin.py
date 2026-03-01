@@ -9,6 +9,15 @@ from server.config import get_config
 from server.db import db_cursor
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-db-tests",
+        action="store_true",
+        default=False,
+        help="启用需要数据库连接的集成测试（需确保 SSH 隧道/数据库可用）",
+    )
+
+
 @pytest.fixture(scope="session")
 def config() -> Dict[str, object]:
     return get_config()
@@ -16,10 +25,18 @@ def config() -> Dict[str, object]:
 
 @pytest.fixture(scope="function", autouse=True)
 def ensure_tables(config: Dict[str, object], request):
+    # 标记为 no_db 的测试不依赖数据库，允许在无隧道/无数据库时执行。
+    if request.node.get_closest_marker("no_db") is not None:
+        yield
+        return
+
     # 维护模式用例不依赖数据库，避免本地无 DB 时被夹具阻断。
     if request.node.fspath.basename == "test_maintenance.py":
         yield
         return
+
+    if not bool(request.config.getoption("--run-db-tests")):
+        pytest.skip("未启用数据库集成测试，请使用 --run-db-tests 并确保 SSH 隧道可用")
 
     required_tables = [
         "users",

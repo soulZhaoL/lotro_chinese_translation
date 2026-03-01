@@ -2,7 +2,7 @@
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel
@@ -508,21 +508,22 @@ def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
 
 @router.post("/upload")
 async def upload_text_template(
-    file: UploadFile = File(...),
-    reason: Optional[str] = Form(default=None),
+    request: Request,
+    fileName: str = Query(..., alias="fileName"),
+    reason: Optional[str] = Query(default=None, alias="reason"),
     user: Dict[str, Any] = Depends(require_auth),
 ):
     """按模板上传翻译结果并覆盖译文与状态。"""
-    if not file.filename:
+    if not fileName:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件缺少文件名")
-    if not file.filename.lower().endswith(".xlsx"):
+    if not fileName.lower().endswith(".xlsx"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件必须为 .xlsx 格式")
 
     config = get_config()
     text_import_export = config["text_import_export"]
     max_upload_rows = text_import_export["max_upload_rows"]
 
-    file_bytes = await file.read()
+    file_bytes = await request.body()
     sheet = _load_upload_sheet(file_bytes)
 
     header_rows = list(sheet.iter_rows(min_row=1, max_row=1))
