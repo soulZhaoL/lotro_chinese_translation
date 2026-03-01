@@ -7,12 +7,12 @@ import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-ro
 
 import { clearToken, getToken, getUserName } from "./api";
 import { getMaintenanceState, subscribeMaintenance } from "./maintenance";
-import Login from "./modules/auth/pages/Login";
-import Dictionary from "./modules/dictionary/pages/Dictionary";
-import TextChanges from "./modules/texts/pages/TextChanges";
-import TextDetail from "./modules/texts/pages/TextDetail";
-import TextEdit from "./modules/texts/pages/TextEdit";
-import TextsList from "./modules/texts/pages/TextsList";
+import Login from "./modules/auth";
+import Dictionary from "./modules/dictionary";
+import TextChanges from "./modules/texts/changes";
+import TextDetail from "./modules/texts/detail";
+import TextEdit from "./modules/texts/edit";
+import TextsList from "./modules/texts/list";
 import Maintenance from "./pages/Maintenance";
 
 const menuItems = [

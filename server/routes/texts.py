@@ -1,14 +1,18 @@
 # 主文本列表与详情路由。
+import os
+from datetime import datetime
 from io import BytesIO
+from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from ..config import get_config
-from ..db import db_cursor
+from ..db import db_cursor, db_stream_cursor
 from ..response import success_response
 from .deps import require_auth
 
@@ -128,6 +132,68 @@ def _load_upload_sheet(file_bytes: bytes):
     if not workbook.worksheets:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件缺少工作表")
     return workbook.worksheets[0]
+
+
+def _cleanup_temp_file(path: str) -> None:
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        return
+
+
+def _build_download_conditions(
+    fid: Optional[str],
+    status_filter: Optional[int],
+    sourceKeyword: Optional[str],
+    translatedKeyword: Optional[str],
+    updatedFrom: Optional[str],
+    updatedTo: Optional[str],
+    claimer: Optional[str],
+    claimed: Optional[bool],
+) -> Tuple[List[str], List[Any]]:
+    conditions: List[str] = []
+    params: List[Any] = []
+
+    if fid is not None:
+        conditions.append("tm.fid = %s")
+        params.append(fid)
+    if status_filter is not None:
+        if status_filter not in (1, 2, 3):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status 必须为 1/2/3")
+        conditions.append("tm.status = %s")
+        params.append(status_filter)
+    if sourceKeyword is not None:
+        conditions.append('tm."sourceText" LIKE %s')
+        params.append(f"%{sourceKeyword}%")
+    if translatedKeyword is not None:
+        conditions.append('tm."translatedText" LIKE %s')
+        params.append(f"%{translatedKeyword}%")
+    if updatedFrom is not None:
+        conditions.append('tm."uptTime" >= %s')
+        params.append(updatedFrom)
+    if updatedTo is not None:
+        conditions.append('tm."uptTime" <= %s')
+        params.append(updatedTo)
+    if claimer is not None:
+        conditions.append(
+            """
+            (
+              SELECT u.username
+              FROM text_claims c
+              JOIN users u ON u.id = c."userId"
+              WHERE c."textId" = tm.id
+              ORDER BY c."claimedAt" DESC, c.id DESC
+              LIMIT 1
+            ) LIKE %s
+            """
+        )
+        params.append(f"%{claimer}%")
+    if claimed is True:
+        conditions.append('EXISTS (SELECT 1 FROM text_claims c WHERE c."textId" = tm.id)')
+    if claimed is False:
+        conditions.append('NOT EXISTS (SELECT 1 FROM text_claims c WHERE c."textId" = tm.id)')
+
+    return conditions, params
 
 
 @router.get("")
@@ -458,43 +524,13 @@ def list_child_texts(
     )
 
 
-@router.get("/download")
+@router.get("/template")
 def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
-    """按固定模板下载文本数据。"""
+    """下载上传模板（仅表头）。"""
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "texts"
     sheet.append(list(TEXT_TEMPLATE_HEADERS))
-
-    with db_cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT
-              id,
-              fid,
-              "textId" AS "textId",
-              part,
-              "sourceText" AS "sourceText",
-              "translatedText" AS "translatedText",
-              status
-            FROM text_main
-            ORDER BY id ASC
-            """
-        )
-        rows = cursor.fetchall()
-
-    for row in rows:
-        sheet.append(
-            [
-                row["id"],
-                row["fid"],
-                row["textId"],
-                row["part"],
-                row["sourceText"],
-                row["translatedText"],
-                row["status"],
-            ]
-        )
 
     output = BytesIO()
     workbook.save(output)
@@ -503,6 +539,115 @@ def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="text_template.xlsx"'},
+    )
+
+
+@router.get("/download")
+def download_texts(
+    fid: Optional[str] = None,
+    status_filter: Optional[int] = Query(default=None, alias="status"),
+    sourceKeyword: Optional[str] = None,
+    translatedKeyword: Optional[str] = None,
+    updatedFrom: Optional[str] = None,
+    updatedTo: Optional[str] = None,
+    claimer: Optional[str] = None,
+    claimed: Optional[bool] = None,
+    _: Dict[str, Any] = Depends(require_auth),
+):
+    """根据筛选条件导出文本数据（流式 + 低内存）。"""
+    config = get_config()
+    text_import_export = config["text_import_export"]
+    max_download_rows = text_import_export["max_download_rows"]
+    download_fetch_batch_size = text_import_export["download_fetch_batch_size"]
+    download_temp_dir = text_import_export["download_temp_dir"]
+
+    if not os.path.isdir(download_temp_dir):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="导出临时目录不存在")
+
+    conditions, params = _build_download_conditions(
+        fid=fid,
+        status_filter=status_filter,
+        sourceKeyword=sourceKeyword,
+        translatedKeyword=translatedKeyword,
+        updatedFrom=updatedFrom,
+        updatedTo=updatedTo,
+        claimer=claimer,
+        claimed=claimed,
+    )
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet(title="texts")
+    sheet.append(list(TEXT_TEMPLATE_HEADERS))
+
+    export_count = 0
+    tmp_path: Optional[str] = None
+    try:
+        with db_stream_cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                  tm.id,
+                  tm.fid,
+                  tm."textId" AS "textId",
+                  tm.part,
+                  tm."sourceText" AS "sourceText",
+                  tm."translatedText" AS "translatedText",
+                  tm.status
+                FROM text_main tm
+                {where_clause}
+                ORDER BY tm.fid ASC, tm."textId" ASC, tm.part ASC
+                """,
+                tuple(params),
+            )
+            while True:
+                rows = cursor.fetchmany(download_fetch_batch_size)
+                if not rows:
+                    break
+                for row in rows:
+                    export_count += 1
+                    if export_count > max_download_rows:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
+                        )
+                    sheet.append(
+                        [
+                            row["id"],
+                            row["fid"],
+                            row["textId"],
+                            row["part"],
+                            row["sourceText"],
+                            row["translatedText"],
+                            row["status"],
+                        ]
+                    )
+
+        if export_count == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
+
+        tmp_file = NamedTemporaryFile(
+            prefix="tmp_text_export_",
+            suffix=".xlsx",
+            dir=download_temp_dir,
+            delete=False,
+        )
+        tmp_path = tmp_file.name
+        tmp_file.close()
+        workbook.save(tmp_path)
+    except Exception:
+        workbook.close()
+        if tmp_path is not None:
+            _cleanup_temp_file(tmp_path)
+        raise
+    workbook.close()
+
+    export_name = f"text_export_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    return FileResponse(
+        path=tmp_path,
+        filename=export_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=BackgroundTask(_cleanup_temp_file, tmp_path),
     )
 
 

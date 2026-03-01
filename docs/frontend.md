@@ -10,29 +10,65 @@
 npm install
 ```
 
-## 配置说明（运行时配置，适配 Vercel）
-前端运行时读取 `web/public/app-config.json`（需随部署产物一起发布）：
-```json
-{
-  "apiBaseUrl": "https://your-api-domain.example.com",
-  "useMock": false
-}
-```
-- `apiBaseUrl`: 后端服务地址
-- `useMock`: 是否启用 Mock（true/false）
+## 三阶段生命周期（mock -> test -> prod）
+前端统一使用 `VITE_*` 变量，并由 Vite 在构建时注入：
 
-> 提示：`app-config.json.example` 为模板，部署前请复制并修改为 `app-config.json`。
-> Vercel 部署时可直接提交 `app-config.json`，或在构建前通过脚本生成该文件。
+- `VITE_API_BASE_URL`: 后端服务地址（例如 `https://api.example.com`）
+- `VITE_USE_MOCK`: 是否启用 Mock，仅支持 `true/false`
 
-## 启动开发服务
-```
-npm run dev
-```
+### 阶段 1：Mock 开发
+目标：前端独立开发，全部走 mock 数据。
 
-## Mock 使用
-- `useMock=true` 时，前端请求会走本地 Mock 数据
-- `useMock=false` 时，前端请求走真实后端接口
-- Mock 数据需与后端接口结构保持一致，避免联通阶段对不上
+1. 复制配置文件：
+```bash
+cp web/.env.mock.example web/.env.mock
+```
+2. 启动：
+```bash
+cd web && npm run dev:mock
+```
+3. 约束：
+- `VITE_USE_MOCK=true`
+- 此阶段不依赖测试/生产后端可用性
+
+### 阶段 2：联调测试（连接测试环境后端）
+目标：前端本地项目连接测试环境服务，验证接口与业务流程。
+
+1. 复制配置文件并填写测试 API：
+```bash
+cp web/.env.test.example web/.env.test
+```
+2. 启动：
+```bash
+cd web && npm run dev:test
+```
+3. 约束：
+- `VITE_USE_MOCK=false`
+- `VITE_API_BASE_URL` 必须指向测试环境地址
+
+### 阶段 3：生产部署（Vercel）
+目标：构建生产产物并部署线上。
+
+1. Vercel 环境变量（Production）：
+- `VITE_USE_MOCK=false`
+- `VITE_API_BASE_URL=https://your-api-domain.example.com`
+2. 本地可先做生产构建验证：
+```bash
+cd web && npm run build:prod
+```
+3. 在 Vercel 重新触发部署（变量变更后必须重新部署）。
+
+## 命令清单
+- `npm run dev:mock`：mock 开发模式（`--mode mock`）
+- `npm run dev:test`：测试联调模式（`--mode test`）
+- `npm run build:test`：测试环境构建（`--mode test`）
+- `npm run build:prod`：生产环境构建（`--mode production`）
+- `npm run dev` / `npm run build`：默认模式（沿用 `.env`）
+
+## 配置约束
+- 所有构建命令（`vite build`）都禁止 `VITE_USE_MOCK=true`
+- `VITE_USE_MOCK=false` 时，`VITE_API_BASE_URL` 不能为空
+- 开发态（`vite serve`）可通过 `VITE_USE_MOCK=true` 打开 mock
 
 ## 安全提示（Mock 仅限开发）
 - `vite-plugin-mock` 依赖 `mockjs`，存在已知高危漏洞且暂无修复版本
@@ -83,5 +119,5 @@ npm run dev
 - 登录/认领/释放/保存/新增等操作有成功与失败提示
 
 ## 常见问题
-- 无法访问接口：确认 `VITE_API_BASE_URL` 指向正确地址
-- Mock 未生效：确认 `VITE_USE_MOCK=true` 并重启 `npm run dev`
+- 无法访问接口：确认 `VITE_API_BASE_URL` 指向正确地址，并重新部署
+- Mock 未生效：确认 `VITE_USE_MOCK=true` 且运行在 `npm run dev:mock`

@@ -44,10 +44,15 @@
 **输入:** translatedText, reason
 **输出:** 更新结果
 
-### [GET] /texts/download
-**描述:** 下载离线翻译模板（xlsx）
+### [GET] /texts/template
+**描述:** 下载离线翻译模板（xlsx，仅表头）
 **输入:** 无
 **输出:** 固定列顺序的模板文件（编号/FID/TextId/Part/原文/译文/状态）
+
+### [GET] /texts/download
+**描述:** 根据筛选条件导出文本结果
+**输入:** fid/status/sourceKeyword/translatedKeyword/updatedFrom/updatedTo/claimer/claimed
+**输出:** 匹配筛选条件的 xlsx 数据文件
 
 ### [POST] /texts/upload
 **描述:** 上传离线翻译结果并批量更新
@@ -94,7 +99,8 @@
 - 列表接口对 sourceText/translatedText 超长内容截断（配置 `text_list.max_text_length`）
 - 数据库编码需为 UTF8，以兼容稀有符号与带音节字符
 - 提供 xlsx 批量导入脚本 `tools/valid_format/xlsx_to_insert.py`（按行范围与分块生成 INSERT） 
-- 新增模板化下载/上传闭环：上传按 `编号` 定位并强校验 `FID/TextId/Part`，失败即整批回滚，成功后统一写入 `text_changes`
+- 新增模板化下载/上传闭环：导出按筛选条件执行；上传按 `编号` 定位并强校验 `FID/TextId/Part`，失败即整批回滚，成功后统一写入 `text_changes`
+- 导出链路支持大数据量安全导出：服务端流式查询、分批写入、临时文件回传，避免高峰内存占用
 
 ## 变更历史
 - 2026-01-31：列表字段补全与长文本展示

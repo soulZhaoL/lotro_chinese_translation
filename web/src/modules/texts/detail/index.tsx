@@ -3,8 +3,8 @@ import { Descriptions, Input, Row, Col, Tag, Typography, message } from "antd";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { apiFetch, getErrorMessage } from "../../../api";
-import { formatDateTime } from "../../../utils/datetime";
+import { apiFetch, getErrorMessage } from "../../../../api";
+import { formatDateTime } from "../../../../utils/datetime";
 
 interface TextDetailResponse {
   text: {

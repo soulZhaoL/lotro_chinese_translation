@@ -30,21 +30,11 @@ def _build_xlsx(rows, headers=None) -> bytes:
 
 
 def test_text_template_download(seed_user):
-    with db_cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            ("file_download", 12001, 1, "src_1", "dst_1", 2, 4),
-        )
-        text_id = cursor.lastrowid
-
     client = TestClient(app)
     token = _login(client, seed_user)
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.get("/texts/download", headers=headers)
+    response = client.get("/texts/template", headers=headers)
     assert response.status_code == 200
     assert response.headers["content-type"].startswith(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -54,7 +44,43 @@ def test_text_template_download(seed_user):
     sheet = workbook.worksheets[0]
     rows = list(sheet.iter_rows(values_only=True))
     assert rows[0] == ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
-    assert rows[1] == (text_id, "file_download", 12001, 1, "src_1", "dst_1", 2)
+    assert len(rows) == 1
+
+
+def test_text_download_by_filter(seed_user):
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_download", 12001, 1, "src_1", "dst_1", 2, 4),
+        )
+        row_a_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_download_other", 12002, 1, "src_2", "dst_2", 1, 0),
+        )
+
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/texts/download?fid=file_download", headers=headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    workbook = load_workbook(BytesIO(response.content), data_only=True)
+    sheet = workbook.worksheets[0]
+    rows = list(sheet.iter_rows(values_only=True))
+    assert rows[0] == ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
+    assert len(rows) == 2
+    assert rows[1] == (row_a_id, "file_download", 12001, 1, "src_1", "dst_1", 2)
 
 
 def test_text_template_upload_success(seed_user):

@@ -226,11 +226,16 @@
 { "id": 1 }
 ```
 
-#### [GET] /texts/download
-**描述:** 按固定模板下载文本数据（离线翻译用）
+#### [GET] /texts/template
+**描述:** 下载上传模板（仅表头）
 
 **响应:** xlsx 文件，表头固定顺序为：
 - `编号`、`FID`、`TextId`、`Part`、`原文`、`译文`、`状态`
+
+#### [GET] /texts/download
+**描述:** 根据筛选条件导出文本（大数据量场景使用流式查询 + 分批写入）
+
+**请求参数:** fid/status/sourceKeyword/translatedKeyword/updatedFrom/updatedTo/claimer/claimed
 
 #### [POST] /texts/upload?fileName=xxx.xlsx&reason=...
 **描述:** 按模板上传离线翻译结果，严格校验后批量覆盖译文与状态

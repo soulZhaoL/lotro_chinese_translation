@@ -36,7 +36,7 @@
 - 前端维护页面与维护状态探测
 - 存量数据库字段驼峰迁移脚本（server/migrations/002_camel_case_columns.sql）
 - 时间字段专项迁移脚本（server/migrations/003_rename_time_columns_to_upt_crt.sql）
-- 文本模板下载接口（/texts/download）与离线翻译上传接口（/texts/upload）
+- 文本模板下载接口（/texts/template）、筛选导出接口（/texts/download）与离线翻译上传接口（/texts/upload）
 - 文本上传模板纯逻辑测试（无需数据库）
 
 ### 变更
@@ -61,6 +61,7 @@
 - 数据库列、后端接口参数/响应、前端与 Mock 字段统一为 camelCase
 - 时间字段由 `createdAt`/`updatedAt` 统一为 `crtTime`/`uptTime`，并同步初始化索引命名
 - pytest 增加 `--run-db-tests` 开关：默认跳过数据库集成测试，按需启用 SSH 隧道后执行
+- 导出能力升级为大数据安全模式：流式数据库读取 + 分批写入 xlsx + 临时文件回传，降低内存溢出风险
 
 ### 修复
 - 数据模型文档补齐 text_locks.releasedAt 字段

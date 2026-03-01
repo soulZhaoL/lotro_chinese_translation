@@ -61,6 +61,29 @@ function parseYamlString(rawValue: string, field: string): string {
   return inner.replaceAll('\\"', '"').replaceAll("\\\\", "\\");
 }
 
+function parseViteBool(value: string | undefined, key: string): boolean {
+  if (value === undefined) {
+    throw new Error(`前端环境变量缺失: ${key}`);
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`前端环境变量无效: ${key} 仅支持 true/false`);
+}
+
+function requireViteString(value: string | undefined, key: string): string {
+  if (value === undefined) {
+    throw new Error(`前端环境变量缺失: ${key}`);
+  }
+  if (!value.trim()) {
+    throw new Error(`前端环境变量无效: ${key} 不能为空`);
+  }
+  return value.trim();
+}
+
 function parseMaintenanceFromLotroYaml(content: string): MaintenanceConfig {
   const lines = content.split(/\r?\n/);
   const startIndex = lines.findIndex((line) => line.trim() === "maintenance:");
@@ -381,10 +404,17 @@ function buildLocalMockPlugin(mockDir: string) {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const isDev = mode === "development";
-  const useMock = isDev && env.VITE_USE_MOCK === "true";
+  const isServe = command === "serve";
+  const useMockFlag = parseViteBool(env.VITE_USE_MOCK, "VITE_USE_MOCK");
+  if (!isServe && useMockFlag) {
+    throw new Error("生产构建禁止启用 Mock: VITE_USE_MOCK 必须为 false");
+  }
+  if (!useMockFlag) {
+    requireViteString(env.VITE_API_BASE_URL, "VITE_API_BASE_URL");
+  }
+  const useMock = isServe && useMockFlag;
 
   const plugins = [react()];
   if (useMock) {

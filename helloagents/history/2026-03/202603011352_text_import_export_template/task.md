@@ -5,13 +5,14 @@
 ---
 
 ## 1. 后端下载/上传接口
-- [√] 1.1 在 `server/routes/texts.py` 新增下载接口，按固定模板导出 xlsx。
+- [√] 1.1 在 `server/routes/texts.py` 新增筛选导出接口，按筛选条件导出 xlsx。
 - [√] 1.2 在 `server/routes/texts.py` 新增上传接口，解析 xlsx 并校验表头和字段类型。
 - [√] 1.3 实现“编号定位 + fid/textId/part 强校验 + 原子更新 + 变更记录写入”。
-- [√] 1.4 补充上传依赖与配置校验（禁止默认值）。
+- [√] 1.4 补充导出/上传配置校验（禁止默认值）。
+- [√] 1.5 导出改造为大数据安全模式（流式读取 + 分批写入 + 临时文件回传）。
 
 ## 2. 前端入口与上传交互
-- [√] 2.1 在 `web/src/modules/texts/pages/TextsList.tsx` 增加下载与上传按钮。
+- [√] 2.1 在 `web/src/modules/texts/pages/TextsList.tsx` 筛选区域增加导出/模板下载/上传按钮。
 - [√] 2.2 适配上传文件选择与结果提示，上传成功后刷新列表。
 - [√] 2.3 调整 `web/src/api.ts` 对 FormData 的请求头处理。
 

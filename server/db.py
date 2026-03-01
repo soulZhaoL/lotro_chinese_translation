@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import pymysql
 from pymysql.constants import FIELD_TYPE
 from pymysql.converters import conversions
-from pymysql.cursors import DictCursor
+from pymysql.cursors import DictCursor, SSDictCursor
 
 from .config import get_config
 
@@ -85,5 +85,13 @@ def get_connection():
 def db_cursor():
     with get_connection() as connection:
         with connection.cursor() as cursor:
+            yield cursor
+            connection.commit()
+
+
+@contextmanager
+def db_stream_cursor():
+    with get_connection() as connection:
+        with connection.cursor(SSDictCursor) as cursor:
             yield cursor
             connection.commit()

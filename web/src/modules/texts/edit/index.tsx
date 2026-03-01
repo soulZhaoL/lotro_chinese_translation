@@ -3,7 +3,7 @@ import { Button, Card, Input, Row, Col, Switch, Typography, message } from "antd
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { apiFetch, getErrorMessage } from "../../../api";
+import { apiFetch, getErrorMessage } from "../../../../api";
 
 interface TextDetailResponse {
   text: {

@@ -6,22 +6,43 @@ export type AppConfig = {
 
 let cachedConfig: AppConfig | null = null;
 
-function validateConfig(payload: any): AppConfig {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("前端配置加载失败: 配置内容无效");
+function parseBooleanEnv(rawValue: unknown, key: string): boolean {
+  if (typeof rawValue !== "string") {
+    throw new Error(`前端配置缺少 ${key}`);
   }
-  if (typeof payload.apiBaseUrl !== "string") {
-    throw new Error("前端配置缺少 apiBaseUrl");
+  if (rawValue === "true") {
+    return true;
   }
-  if (typeof payload.useMock !== "boolean") {
-    throw new Error("前端配置缺少 useMock");
+  if (rawValue === "false") {
+    return false;
   }
-  if (!payload.useMock && !payload.apiBaseUrl) {
-    throw new Error("前端配置 apiBaseUrl 不能为空");
+  throw new Error(`前端配置无效: ${key} 仅支持 true/false`);
+}
+
+function parseApiBaseUrl(rawValue: unknown): string {
+  if (typeof rawValue !== "string") {
+    throw new Error("前端配置缺少 VITE_API_BASE_URL");
   }
+  const value = rawValue.trim();
+  if (!value) {
+    throw new Error("前端配置 VITE_API_BASE_URL 不能为空");
+  }
+  return value.replace(/\/+$/, "");
+}
+
+function resolveConfig(): AppConfig {
+  const useMock = parseBooleanEnv(import.meta.env.VITE_USE_MOCK, "VITE_USE_MOCK");
+  const isDev = import.meta.env.DEV;
+
+  if (useMock && !isDev) {
+    throw new Error("前端配置无效: 生产构建禁止启用 Mock（VITE_USE_MOCK 必须为 false）");
+  }
+
+  const apiBaseUrl = useMock ? "" : parseApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+
   return {
-    apiBaseUrl: payload.apiBaseUrl,
-    useMock: payload.useMock,
+    apiBaseUrl,
+    useMock,
   };
 }
 
@@ -29,19 +50,7 @@ export async function loadAppConfig(): Promise<AppConfig> {
   if (cachedConfig) {
     return cachedConfig;
   }
-  const useMockRaw = import.meta.env.VITE_USE_MOCK;
-  if (useMockRaw === undefined) {
-    throw new Error("前端配置缺少 VITE_USE_MOCK");
-  }
-  const apiBaseUrlRaw = import.meta.env.VITE_API_BASE_URL;
-  if (apiBaseUrlRaw === undefined) {
-    throw new Error("前端配置缺少 VITE_API_BASE_URL");
-  }
-  const payload = {
-    apiBaseUrl: apiBaseUrlRaw,
-    useMock: useMockRaw === "true",
-  };
-  cachedConfig = validateConfig(payload);
+  cachedConfig = resolveConfig();
   return cachedConfig;
 }
 

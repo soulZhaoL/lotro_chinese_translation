@@ -4,11 +4,14 @@
 
 ### 后端接口设计
 1. `GET /texts/download`
-- 查询 `text_main` 并按 `id ASC` 导出 xlsx。
+- 根据筛选条件（fid/status/sourceKeyword/translatedKeyword/updatedFrom/updatedTo/claimer/claimed）导出 xlsx。
 - 表头固定为: `编号`、`FID`、`TextId`、`Part`、`原文`、`译文`、`状态`。
-- 以附件形式返回文件，供翻译人员线下编辑。
+- 支持大数据量导出：流式 DB 游标 + 分批 `fetchmany` + `openpyxl write_only` + 临时文件回传。
 
-2. `POST /texts/upload`
+2. `GET /texts/template`
+- 仅下载模板表头，供离线编辑起始文件使用。
+
+3. `POST /texts/upload`
 - 使用二进制请求体上传 xlsx 文件（`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`）。
 - 通过 query 参数传递 `fileName`（必填）与 `reason`（可选）。
 - 校验项:
@@ -33,21 +36,23 @@
 3. 任意异常直接回滚，禁止部分成功。
 
 ### 前端交互设计
-1. 文本列表页新增“下载模板”按钮，调用下载接口并触发浏览器保存。
-2. 新增“上传结果”按钮与隐藏文件选择器，限制 `.xlsx`。
-3. 上传成功后提示并刷新列表；失败展示后端错误信息。
-4. 上传请求使用 `fetch` 发送二进制 body，避免 `multipart` 依赖导致后端启动前置校验失败。
+1. 将“导出筛选结果/下载模板/上传结果”统一放在筛选区域操作栏（搜索按钮旁）。
+2. “导出筛选结果”读取当前筛选参数后发起下载。
+3. “上传结果”按钮配合隐藏文件选择器，限制 `.xlsx`。
+4. 上传成功后提示并刷新列表；失败展示后端错误信息。
+5. 上传请求使用 `fetch` 发送二进制 body，避免 `multipart` 依赖导致后端启动前置校验失败。
 
 ## 安全与性能
 - 安全:
   - 强模板校验避免列错位写入。
   - 主键+业务键双重一致性校验防止误更新。
 - 性能:
-  - 目标场景为翻译批量回传，优先保证数据正确性而非极限吞吐。
-  - 若后续数据量明显增长，可新增上传行数配置并分页批处理。
+  - 导出采用流式读取和分批写入，规避百万级数据的内存峰值风险。
+  - 通过配置约束最大导出量与批次大小，防止单次导出拖垮服务。
 
 ## 测试与验证
-1. 下载接口测试: 校验 xlsx 表头与示例行。
+1. 模板下载测试: 校验 xlsx 表头。
+2. 筛选导出测试: 校验筛选条件生效且数据正确。
 2. 上传成功测试: 校验 text_main 变更与 text_changes 记录。
 3. 上传失败测试: 编号/FID/TextId/Part 不匹配时报错且数据不变。
 4. 运行文本模块相关 pytest 回归。
