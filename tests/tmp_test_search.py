@@ -39,3 +39,32 @@ def test_keyword_search(seed_user):
     data = response.json()["data"]
     assert data["total"] == 1
     assert data["items"][0]["fid"] == "file_a"
+
+
+def test_flat_list_endpoint_returns_all_parts(seed_user):
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_flat", 3001, 1, "flat parent", None, 1, 0),
+        )
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_flat", 3002, 2, "flat child", None, 2, 0),
+        )
+
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/texts?fid=file_flat", headers=headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    parts = sorted(item["part"] for item in data["items"])
+    assert parts == [1, 2]

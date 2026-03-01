@@ -21,6 +21,7 @@ router = APIRouter(prefix="/texts", tags=["texts"])
 
 TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
+STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
 
 
@@ -85,6 +86,16 @@ def _parse_status(value: Any, row_number: int) -> int:
             detail=f"第 {row_number} 行字段 状态 非法，必须为 1/2/3 或 新增/修改/已完成",
         )
     return status_value
+
+
+def _format_status_label(status_value: Any) -> str:
+    if isinstance(status_value, bool):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="状态字段类型异常")
+    if not isinstance(status_value, int):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="状态字段类型异常")
+    if status_value not in STATUS_VALUE_TO_LABEL:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="状态枚举缺失映射")
+    return STATUS_VALUE_TO_LABEL[status_value]
 
 
 def _parse_required_str(value: Any, field_name: str, row_number: int) -> str:
@@ -683,7 +694,7 @@ def download_texts(
                   tm.status
                 FROM text_main tm
                 {where_clause}
-                ORDER BY tm.fid ASC, tm."textId" ASC, tm.part ASC
+                ORDER BY tm."uptTime" DESC, tm.id DESC
                 """,
                 tuple(params),
             )
@@ -706,7 +717,7 @@ def download_texts(
                             row["part"],
                             row["sourceText"],
                             row["translatedText"],
-                            row["status"],
+                            _format_status_label(row["status"]),
                         ]
                     )
 

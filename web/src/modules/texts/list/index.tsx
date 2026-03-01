@@ -1,6 +1,6 @@
 import type { ActionType } from "@ant-design/pro-components";
 import { ProTable } from "@ant-design/pro-components";
-import { Alert, Button, Space, message } from "antd";
+import { Button, message } from "antd";
 import type { ProFormInstance } from "@ant-design/pro-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -8,21 +8,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { getErrorMessage, getToken } from "../../../api";
 import { getAppConfig } from "../../../config";
 import { parseStoredListState, saveListState } from "../storage";
-import type {
-  ActiveConfirmState,
-  ChildQuery,
-  ChildState,
-  ListStateSnapshot,
-  QueryParams,
-  TextItem,
-  TextListResponse,
-} from "../types";
-import {
-  ChildTablePanel,
-  createChildColumns,
-  createEmptyChildState,
-  createParentColumns,
-} from "./table";
+import type { ActiveConfirmState, ListStateSnapshot, QueryParams, TextItem, TextListResponse } from "../types";
+import { createParentColumns } from "./table";
 import {
   SearchActionBar,
   downloadFilteredFile,
@@ -44,163 +31,41 @@ export default function TextsList() {
   const [parentSearch, setParentSearch] = useState<QueryParams>({});
   const [parentPage, setParentPage] = useState(1);
   const [parentPageSize, setParentPageSize] = useState(20);
-  const [expandedRowKeys, setExpandedRowKeys] = useState<Array<string | number>>([]);
-  const [childStates, setChildStates] = useState<Record<string, ChildState>>({});
-  const [pageFids, setPageFids] = useState<string[]>([]);
+  const [restoreReady, setRestoreReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const childStatesRef = useRef<Record<string, ChildState>>({});
-  const parentSearchRef = useRef<QueryParams>({});
-
-  useEffect(() => {
-    childStatesRef.current = childStates;
-  }, [childStates]);
-
-  useEffect(() => {
-    parentSearchRef.current = parentSearch;
-  }, [parentSearch]);
 
   const buildListState = useCallback((): ListStateSnapshot => {
-    const childQueries: Record<string, ChildQuery> = {};
-    Object.entries(childStates).forEach(([fid, state]) => {
-      childQueries[fid] = {
-        page: state.page,
-        pageSize: state.pageSize,
-        textId: state.textId,
-      };
-    });
-
     return {
       search: parentSearch,
       page: parentPage,
       pageSize: parentPageSize,
-      expandedRowKeys,
-      childQueries,
     };
-  }, [childStates, expandedRowKeys, parentPage, parentPageSize, parentSearch]);
+  }, [parentPage, parentPageSize, parentSearch]);
 
   const persistListState = useCallback((snapshot: ListStateSnapshot) => {
     saveListState(snapshot);
   }, []);
 
   useEffect(() => {
-    persistListState(buildListState());
-  }, [buildListState, persistListState]);
-
-  const fetchChildren = useCallback(async (fid: string, overrides?: Partial<ChildQuery>) => {
-    const current = childStatesRef.current[fid] || createEmptyChildState(1, 10);
-    const hasOverrideTextId = Boolean(overrides && Object.prototype.hasOwnProperty.call(overrides, "textId"));
-
-    const nextQuery: ChildQuery = {
-      page: overrides?.page ?? current.page,
-      pageSize: overrides?.pageSize ?? current.pageSize,
-      textId: hasOverrideTextId ? overrides?.textId : current.textId,
-    };
-
-    setChildStates((prev) => ({
-      ...prev,
-      [fid]: {
-        ...(prev[fid] || current),
-        ...nextQuery,
-        loading: true,
-      },
-    }));
-
-    try {
-      const query = new URLSearchParams();
-      query.set("fid", fid);
-      query.set("page", String(nextQuery.page));
-      query.set("pageSize", String(nextQuery.pageSize));
-      if (nextQuery.textId) {
-        query.set("textId", nextQuery.textId);
-      }
-      if (parentSearchRef.current.sourceKeyword) {
-        query.set("sourceKeyword", parentSearchRef.current.sourceKeyword);
-      }
-      if (parentSearchRef.current.translatedKeyword) {
-        query.set("translatedKeyword", parentSearchRef.current.translatedKeyword);
-      }
-
-      const config = getAppConfig();
-      const apiBase = config.useMock ? "/api" : config.apiBaseUrl;
-      if (!apiBase) {
-        throw new Error("缺少 apiBaseUrl");
-      }
-      const token = getToken();
-      const headers = new Headers();
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-
-      const response = await fetch(`${apiBase}/texts/children?${query.toString()}`, {
-        method: "GET",
-        headers,
-      });
-      const payload = (await response.json()) as {
-        code?: string;
-        message?: string;
-        data?: TextListResponse;
-      };
-      if (!response.ok || payload.code !== "0000" || !payload.data) {
-        throw new Error(payload.message || "加载子列表失败");
-      }
-      const data = payload.data;
-
-      setChildStates((prev) => ({
-        ...prev,
-        [fid]: {
-          ...(prev[fid] || current),
-          ...nextQuery,
-          items: data.items,
-          total: data.total,
-          loading: false,
-        },
-      }));
-    } catch (error) {
-      message.error(getErrorMessage(error, "加载子列表失败"));
-      setChildStates((prev) => ({
-        ...prev,
-        [fid]: {
-          ...(prev[fid] || current),
-          ...nextQuery,
-          items: [],
-          total: 0,
-          loading: false,
-        },
-      }));
+    if (!restoreReady) {
+      return;
     }
-  }, []);
+    persistListState(buildListState());
+  }, [buildListState, persistListState, restoreReady]);
 
   useEffect(() => {
     const state = location.state as { listState?: ListStateSnapshot; refresh?: boolean } | null;
     const stored = state?.listState || parseStoredListState();
 
     if (stored) {
-      const restoredExpandedKeys = stored.expandedRowKeys || [];
-      const normalizedExpandedKeys = restoredExpandedKeys.length ? [restoredExpandedKeys[0]] : [];
       setParentSearch(stored.search || {});
       setParentPage(stored.page || 1);
       setParentPageSize(stored.pageSize || 20);
-      setExpandedRowKeys(normalizedExpandedKeys);
-
-      const nextChildStates: Record<string, ChildState> = {};
-      Object.entries(stored.childQueries || {}).forEach(([fid, query]) => {
-        if (!normalizedExpandedKeys.includes(fid)) {
-          return;
-        }
-        nextChildStates[fid] = createEmptyChildState(query.page, query.pageSize);
-        nextChildStates[fid].textId = query.textId;
-      });
-      setChildStates(nextChildStates);
 
       if (formRef.current) {
         formRef.current.setFieldsValue(stored.search || {});
       }
-
-      normalizedExpandedKeys.forEach((key) => {
-        const fid = String(key);
-        fetchChildren(fid, stored.childQueries?.[fid]);
-      });
     }
 
     if (state?.listState || state?.refresh) {
@@ -210,7 +75,8 @@ export default function TextsList() {
     if (state?.refresh) {
       actionRef.current?.reload();
     }
-  }, [fetchChildren, location.pathname, location.state, navigate]);
+    setRestoreReady(true);
+  }, [location.pathname, location.state, navigate]);
 
   const navigateWithState = useCallback(
     (path: string) => {
@@ -219,18 +85,6 @@ export default function TextsList() {
       navigate(path, { state: { listState: snapshot } });
     },
     [buildListState, navigate, persistListState]
-  );
-
-  const handleChildSearch = useCallback(
-    (fid: string, value: string) => {
-      const trimmed = value.trim();
-      if (trimmed && !/^\d+$/.test(trimmed)) {
-        message.warning("textId 仅支持数字");
-        return;
-      }
-      fetchChildren(fid, { page: 1, textId: trimmed || undefined });
-    },
-    [fetchChildren]
   );
 
   const handleDownloadTemplate = useCallback(async () => {
@@ -315,27 +169,12 @@ export default function TextsList() {
       }
 
       message.success(`上传成功，更新 ${payload.data?.updatedCount || 0} 条`);
-      setExpandedRowKeys([]);
-      setChildStates({});
       actionRef.current?.reload();
     } catch (error) {
       message.error(getErrorMessage(error, "上传失败"));
     } finally {
       setUploading(false);
     }
-  }, []);
-
-  const expandFirstOnPage = useCallback(() => {
-    const first = pageFids[0];
-    if (!first) {
-      return;
-    }
-    setExpandedRowKeys([first]);
-    fetchChildren(first);
-  }, [fetchChildren, pageFids]);
-
-  const collapseAll = useCallback(() => {
-    setExpandedRowKeys([]);
   }, []);
 
   const parentColumns = useMemo(
@@ -355,57 +194,11 @@ export default function TextsList() {
     [activeConfirm, claimingId, navigateWithState, parentSearch.sourceKeyword, parentSearch.translatedKeyword, releasingId]
   );
 
-  const childColumns = useMemo(
-    () =>
-      createChildColumns({
-        claimingId,
-        releasingId,
-        activeConfirm,
-        setClaimingId,
-        setReleasingId,
-        setActiveConfirm,
-        navigateWithState,
-        sourceKeyword: parentSearch.sourceKeyword,
-        translatedKeyword: parentSearch.translatedKeyword,
-        onChildChanged: (fid) => fetchChildren(fid),
-      }),
-    [
-      activeConfirm,
-      claimingId,
-      fetchChildren,
-      navigateWithState,
-      parentSearch.sourceKeyword,
-      parentSearch.translatedKeyword,
-      releasingId,
-    ]
-  );
-
-  const keywordActive = Boolean(parentSearch.sourceKeyword || parentSearch.translatedKeyword);
-
   return (
     <>
-      {keywordActive ? (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 8 }}
-          message="关键字筛选会同时匹配子列表内容；如需定位命中项，可展开查看。"
-          action={
-            <Space size={8}>
-              <Button size="small" onClick={expandFirstOnPage} disabled={!pageFids.length}>
-                展开首条
-              </Button>
-              <Button size="small" onClick={collapseAll} disabled={!expandedRowKeys.length}>
-                全部收起
-              </Button>
-            </Space>
-          }
-        />
-      ) : null}
-
       <ProTable<TextItem, QueryParams>
-        rowKey="fid"
-        headerTitle="父级主文本列表（part=1）"
+        rowKey="id"
+        headerTitle="文本列表"
         actionRef={actionRef}
         formRef={formRef}
         size="small"
@@ -431,19 +224,15 @@ export default function TextsList() {
           const normalized = normalizeQueryParams(params as QueryParams & { uptTime?: [string, string] });
           setParentSearch(normalized);
           setParentPage(1);
-          setExpandedRowKeys([]);
-          setChildStates({});
         }}
         onReset={() => {
           setParentSearch({});
           setParentPage(1);
-          setExpandedRowKeys([]);
-          setChildStates({});
         }}
         pagination={{
           current: parentPage,
           pageSize: parentPageSize,
-          showTotal: (total) => `父级主文本共 ${total} 条（统计口径：part=1）`,
+          showTotal: (total) => `文本共 ${total} 条`,
           showSizeChanger: true,
           onChange: (page, pageSize) => {
             setParentPage(page);
@@ -477,7 +266,7 @@ export default function TextsList() {
               headers.set("Authorization", `Bearer ${token}`);
             }
 
-            const response = await fetch(`${apiBase}/texts/parents?${query.toString()}`, {
+            const response = await fetch(`${apiBase}/texts?${query.toString()}`, {
               method: "GET",
               headers,
             });
@@ -491,7 +280,6 @@ export default function TextsList() {
             }
             const data = payload.data;
 
-            setPageFids(Array.from(new Set(data.items.map((item) => item.fid))));
             return {
               data: data.items,
               success: true,
@@ -499,7 +287,6 @@ export default function TextsList() {
             };
           } catch (error) {
             message.error(getErrorMessage(error, "加载列表失败"));
-            setPageFids([]);
             return {
               data: [],
               success: false,
@@ -508,29 +295,6 @@ export default function TextsList() {
           } finally {
             setQueryLoading(false);
           }
-        }}
-        expandable={{
-          expandedRowKeys,
-          onExpand: (expanded, record) => {
-            const fid = record.fid;
-            setExpandedRowKeys(expanded ? [fid] : []);
-            if (expanded) {
-              fetchChildren(fid);
-            }
-          },
-          expandedRowRender: (record) => {
-            const state = childStates[record.fid] || createEmptyChildState(1, 10);
-            return (
-              <ChildTablePanel
-                parent={record}
-                state={state}
-                childColumns={childColumns}
-                fetchChildren={fetchChildren}
-                setChildStates={setChildStates}
-                handleChildSearch={handleChildSearch}
-              />
-            );
-          },
         }}
         columns={parentColumns}
       />

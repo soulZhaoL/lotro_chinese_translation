@@ -23,7 +23,7 @@ export default [
     url: "/api/texts",
     method: "get",
     response: ({ query }) => {
-      const items = generateTexts(query || {}).filter((item) => item.part === 1);
+      const items = generateTexts(query || {});
       return buildListResponse(items, query);
     },
   },

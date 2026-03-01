@@ -32,6 +32,7 @@ export default function TextEdit() {
         );
         setDetail(response);
         setTranslated(response.text.translatedText || "");
+        setMarkCompleted(response.text.status === 3);
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
       }

@@ -80,7 +80,7 @@ def test_text_download_by_filter(seed_user):
     rows = list(sheet.iter_rows(values_only=True))
     assert rows[0] == ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
     assert len(rows) == 2
-    assert rows[1] == (row_a_id, "file_download", 12001, 1, "src_1", "dst_1", 2)
+    assert rows[1] == (row_a_id, "file_download", 12001, 1, "src_1", "dst_1", "修改")
 
 
 def test_text_template_upload_success(seed_user):
@@ -177,3 +177,45 @@ def test_text_template_upload_mismatch_rollback(seed_user):
 
         cursor.execute('SELECT COUNT(*) AS total FROM text_changes WHERE "textId" = %s', (text_id,))
         assert cursor.fetchone()["total"] == 0
+
+
+def test_text_list_and_download_order_consistent(seed_user):
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_order", 10001, 1, "old_src", "old_dst", 1, 0),
+        )
+        older_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_order", 20002, 1, "new_src", "new_dst", 2, 1),
+        )
+        newer_id = cursor.lastrowid
+        cursor.execute('UPDATE text_main SET "uptTime" = %s WHERE id = %s', ("2026-01-01 00:00:00", older_id))
+        cursor.execute('UPDATE text_main SET "uptTime" = %s WHERE id = %s', ("2026-01-02 00:00:00", newer_id))
+
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list_response = client.get("/texts?fid=file_order&page=1&pageSize=20", headers=headers)
+    assert list_response.status_code == 200
+    list_payload = list_response.json()["data"]["items"]
+    assert len(list_payload) == 2
+    assert list_payload[0]["id"] == newer_id
+
+    download_response = client.get("/texts/download?fid=file_order", headers=headers)
+    assert download_response.status_code == 200
+
+    workbook = load_workbook(BytesIO(download_response.content), data_only=True)
+    sheet = workbook.worksheets[0]
+    rows = list(sheet.iter_rows(values_only=True))
+    assert len(rows) == 3
+    assert rows[1][0] == newer_id
+    assert rows[1][6] == "修改"
