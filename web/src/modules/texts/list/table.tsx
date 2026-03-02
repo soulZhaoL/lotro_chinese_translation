@@ -9,6 +9,8 @@ import type { ActiveConfirmState, TextItem } from "../types";
 const DISPLAY_LIMIT = 200;
 const TOOLTIP_LIMIT = 5000;
 const MIN_ACTION_DELAY_MS = 300;
+const ACTION_COLUMN_WIDTH = 220;
+const POPOVER_MAX_WIDTH = "min(620px, calc(100vw - 48px))";
 
 async function ensureMinDelay(startAt: number, minMs: number) {
   const elapsed = Date.now() - startAt;
@@ -71,9 +73,11 @@ function renderLongText(value?: string | null, highlightKeyword?: string) {
   const tooltipText = truncateText(text, TOOLTIP_LIMIT);
   return (
     <Popover
-      placement="rightTop"
+      placement="top"
+      autoAdjustOverflow
+      getPopupContainer={() => document.body}
       content={
-        <div style={{ maxHeight: 320, overflowY: "auto", maxWidth: 620, whiteSpace: "pre-wrap" }}>
+        <div style={{ maxHeight: 320, overflowY: "auto", maxWidth: POPOVER_MAX_WIDTH, whiteSpace: "pre-wrap" }}>
           {renderHighlightedText(tooltipText, highlightKeyword)}
         </div>
       }
@@ -273,6 +277,8 @@ export function createParentColumns({
       title: "编号",
       dataIndex: "id",
       hideInSearch: true,
+      width: 88,
+      fixed: "left",
       render: (_, record) => (
         <Button type="link" onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}`)}>
           {record.id}
@@ -283,45 +289,50 @@ export function createParentColumns({
       title: "FID",
       dataIndex: "fid",
       hideInSearch: true,
+      width: 110,
+      fixed: "left",
       render: (_, record) => <Typography.Text copyable={{ text: record.fid }}>{record.fid}</Typography.Text>,
     },
-    { title: "TextId", dataIndex: "textId", hideInSearch: true },
-    { title: "Part", dataIndex: "part", hideInSearch: true },
+    { title: "TextId", dataIndex: "textId", hideInSearch: true, width: 140 },
+    { title: "Part", dataIndex: "part", hideInSearch: true, width: 90 },
     {
       title: "原文",
       dataIndex: "sourceText",
       hideInSearch: true,
-      width: 280,
+      width: 360,
       render: (_, record) => renderLongText(record.sourceText, sourceKeyword),
     },
     {
       title: "译文",
       dataIndex: "translatedText",
       hideInSearch: true,
-      width: 280,
+      width: 360,
       render: (_, record) => renderLongText(record.translatedText, translatedKeyword),
     },
     {
       title: "状态",
       dataIndex: "status",
       hideInSearch: true,
+      width: 100,
       render: (_, record) => {
         const meta = TEXT_STATUS_META[record.status];
         return <Tag color={meta?.color || "default"}>{meta?.label || "-"}</Tag>;
       },
     },
-    { title: "编辑次数", dataIndex: "editCount", hideInSearch: true },
-    { title: "认领人", dataIndex: "claimedBy", hideInSearch: true, renderText: (val) => val || "-" },
+    { title: "编辑次数", dataIndex: "editCount", hideInSearch: true, width: 100 },
+    { title: "认领人", dataIndex: "claimedBy", hideInSearch: true, width: 120, renderText: (val) => val || "-" },
     {
       title: "更新时间",
       dataIndex: "uptTime",
       hideInSearch: true,
+      width: 190,
       renderText: (val) => formatDateTime(val),
     },
     {
       title: "操作",
       valueType: "option",
-      width: 160,
+      width: ACTION_COLUMN_WIDTH,
+      fixed: "right",
       render: (_, record) => (
         <TextRowActions
           record={record}

@@ -19,6 +19,8 @@ import {
   resolveSearchParams,
 } from "./filter";
 
+const TABLE_SCROLL_X = 1900;
+
 export default function TextsList() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -239,6 +241,7 @@ export default function TextsList() {
             setParentPageSize(pageSize || parentPageSize);
           },
         }}
+        scroll={{ x: TABLE_SCROLL_X }}
         request={async (params) => {
           setQueryLoading(true);
           try {
