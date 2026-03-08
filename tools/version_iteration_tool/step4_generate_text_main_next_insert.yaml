@@ -1,10 +1,10 @@
 env: test
 
 input:
-  sqlitePath: work_text/Texts_461.db
-  sourceTable: patch_data
-  fidColumn: fid
-  textDataColumn: text_data
+  sqlitePath: work_text/Texts_47.db
+  sourceTable: patch_data   # DB 内的表明
+  fidColumn: fid            # DB 中的 fid 列名
+  textDataColumn: text_data # DB 中的 text_data 列名
 
 parsing:
   splitDelimiter: "|||"

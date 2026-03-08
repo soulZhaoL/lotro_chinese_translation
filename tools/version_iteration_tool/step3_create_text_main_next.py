@@ -3,13 +3,11 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from common import (
-    ConfigError,
     column_exists,
     connect_mysql_from_dsn,
-    constraint_exists,
     load_env_file,
     load_yaml_config,
     quote_ident,
@@ -51,16 +49,6 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         runtime_env,
         "createNext.nextTable",
     )
-    unique_constraint_name = require_type(
-        require_key(create_cfg, "uniqueConstraintName", "createNext."),
-        str,
-        "createNext.uniqueConstraintName",
-    )
-    unique_columns = require_type(
-        require_key(create_cfg, "uniqueColumns", "createNext."),
-        list,
-        "createNext.uniqueColumns",
-    )
     auto_inc_cfg = require_type(
         require_key(create_cfg, "autoIncrement", "createNext."),
         dict,
@@ -72,36 +60,15 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         "createNext.autoIncrement.idColumn",
     )
 
-    require_identifier(unique_constraint_name, "createNext.uniqueConstraintName")
     require_identifier(id_column, "createNext.autoIncrement.idColumn")
-
-    if not unique_columns:
-        raise ConfigError("createNext.uniqueColumns 不能为空")
-    normalized_unique_columns: List[str] = []
-    for idx, column_name in enumerate(unique_columns):
-        value = require_type(column_name, str, f"createNext.uniqueColumns[{idx}]")
-        normalized_unique_columns.append(require_identifier(value, f"createNext.uniqueColumns[{idx}]"))
 
     return {
         "env": runtime_env,
         "dsnEnv": dsn_env,
         "sourceTable": source_table,
         "nextTable": next_table,
-        "uniqueConstraintName": unique_constraint_name,
-        "uniqueColumns": normalized_unique_columns,
         "idColumn": id_column,
     }
-
-
-def _add_unique_constraint(cursor, table_ref: str, constraint_name: str, columns: List[str]) -> None:
-    if constraint_exists(cursor, table_ref, constraint_name):
-        raise RuntimeError(f"唯一约束已存在: {table_ref}.{constraint_name}")
-    columns_sql = ", ".join(quote_ident(column_name) for column_name in columns)
-    cursor.execute(
-        f"ALTER TABLE {quote_table_ref(table_ref)} "
-        f"ADD CONSTRAINT {quote_ident(constraint_name)} UNIQUE ({columns_sql})"
-    )
-    print(f"[OK] 已创建唯一约束: {table_ref}.{constraint_name}")
 
 
 def _ensure_auto_increment(cursor, table_ref: str, id_column: str) -> None:
@@ -142,12 +109,6 @@ def main() -> None:
                 )
                 print(f"[OK] [{config['env']}] 已创建新表: {config['nextTable']}")
 
-                _add_unique_constraint(
-                    cursor,
-                    config["nextTable"],
-                    config["uniqueConstraintName"],
-                    config["uniqueColumns"],
-                )
                 _ensure_auto_increment(
                     cursor,
                     config["nextTable"],

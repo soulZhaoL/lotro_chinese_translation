@@ -73,6 +73,7 @@ CREATE TABLE text_main (
   CONSTRAINT chk_text_main_status CHECK (status IN (1, 2, 3))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='主文本与翻译表';
 
+CREATE UNIQUE INDEX uq_text_main_fid_text_id_part ON text_main(fid, `textId`, part);
 CREATE INDEX idx_text_main_fid ON text_main(fid);
 CREATE INDEX idx_text_main_fid_part ON text_main(fid, part);
 CREATE INDEX idx_text_main_text_id ON text_main(`textId`);

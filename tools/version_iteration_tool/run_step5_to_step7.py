@@ -5,13 +5,16 @@ import argparse
 import os
 import time
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Optional
 
 from common import (
+    ConfigError,
     connect_mysql_from_dsn,
     load_env_file,
+    load_yaml_config,
+    require_key,
     require_runtime_env,
-    require_table_ref,
+    require_type,
     resolve_env_table_ref,
     start_ssh_tunnel_from_env,
 )
@@ -68,45 +71,86 @@ def _run_sql_file(cursor, path: Path, variables: Dict[str, str]) -> None:
         pass
 
 
+def _validate_config(config: Dict[str, Any], start_step_override: Optional[int]) -> Dict[str, Any]:
+    runtime_env = require_runtime_env(
+        require_type(require_key(config, "env", ""), str, "env"),
+        "env",
+    )
+    database = require_type(require_key(config, "database", ""), dict, "database")
+    tables = require_type(require_key(config, "tables", ""), dict, "tables")
+
+    dsn_env = require_type(require_key(database, "dsnEnv", "database."), str, "database.dsnEnv")
+
+    backup_table = resolve_env_table_ref(
+        require_type(require_key(tables, "backupTable", "tables."), str, "tables.backupTable"),
+        runtime_env, "tables.backupTable",
+    )
+    next_table = resolve_env_table_ref(
+        require_type(require_key(tables, "nextTable", "tables."), str, "tables.nextTable"),
+        runtime_env, "tables.nextTable",
+    )
+    map_table = resolve_env_table_ref(
+        require_type(require_key(tables, "mapTable", "tables."), str, "tables.mapTable"),
+        runtime_env, "tables.mapTable",
+    )
+    changes_table = resolve_env_table_ref(
+        require_type(require_key(tables, "changesTable", "tables."), str, "tables.changesTable"),
+        runtime_env, "tables.changesTable",
+    )
+
+    if start_step_override is not None:
+        start_step = start_step_override
+    else:
+        start_step_raw = require_type(require_key(config, "startStep", ""), int, "startStep")
+        if start_step_raw not in (5, 6, 7):
+            raise ConfigError(f"startStep 仅支持 5/6/7，当前值: {start_step_raw}")
+        start_step = start_step_raw
+
+    return {
+        "env": runtime_env,
+        "dsnEnv": dsn_env,
+        "backupTable": backup_table,
+        "nextTable": next_table,
+        "mapTable": map_table,
+        "changesTable": changes_table,
+        "startStep": start_step,
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="执行 Step5/Step6/Step7（Python 版）")
-    parser.add_argument("--runtime-env", required=True, choices=("prod", "test"), help="运行环境: prod/test")
-    parser.add_argument("--backup-table", required=True, help="Step5/Step6 使用的备份表")
-    parser.add_argument("--next-table", required=True, help="Step5/Step6 使用的新表")
-    parser.add_argument("--map-table", required=True, help="Step6 创建、Step7 使用的映射表")
-    parser.add_argument("--changes-table", required=True, help="Step7 使用的变更表")
+    parser.add_argument("--config", required=True, help="配置文件路径")
     parser.add_argument("--env", help="环境文件路径（可选）")
     parser.add_argument(
         "--start-step",
-        required=True,
         choices=("5", "6", "7"),
-        help="从哪个步骤开始执行（5=全部，6=仅 Step6+Step7，7=仅 Step7）",
+        help="从哪个步骤开始执行，覆盖配置文件中的 startStep（5=全部，6=仅 Step6+Step7，7=仅 Step7）",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    start_step = int(args.start_step)
-    runtime_env = require_runtime_env(args.runtime_env, "runtime_env")
-
-    require_table_ref(args.backup_table, "backup_table")
-    require_table_ref(args.next_table, "next_table")
-    require_table_ref(args.map_table, "map_table")
-    require_table_ref(args.changes_table, "changes_table")
-
-    backup_table = resolve_env_table_ref(args.backup_table, runtime_env, "backup_table")
-    next_table = resolve_env_table_ref(args.next_table, runtime_env, "next_table")
-    map_table = resolve_env_table_ref(args.map_table, runtime_env, "map_table")
-    changes_table = resolve_env_table_ref(args.changes_table, runtime_env, "changes_table")
 
     if args.env:
         os.environ["LOTRO_ENV_PATH"] = str(Path(args.env).expanduser().resolve())
 
+    raw_config = load_yaml_config(Path(args.config).expanduser().resolve())
+    start_step_override = int(args.start_step) if args.start_step else None
+    config = _validate_config(raw_config, start_step_override)
+
     load_env_file()
-    if "LOTRO_DATABASE_DSN" not in os.environ:
-        raise RuntimeError("环境变量未设置: LOTRO_DATABASE_DSN")
-    dsn = os.environ["LOTRO_DATABASE_DSN"]
+    dsn_env = config["dsnEnv"]
+    if dsn_env not in os.environ:
+        raise RuntimeError(f"环境变量未设置: {dsn_env}")
+    dsn = os.environ[dsn_env]
+
+    backup_table = config["backupTable"]
+    next_table = config["nextTable"]
+    map_table = config["mapTable"]
+    changes_table = config["changesTable"]
+    start_step = config["startStep"]
+    runtime_env = config["env"]
 
     root = Path(__file__).resolve().parents[2]
     step5_sql = root / "tools" / "version_iteration_tool" / "step5_compare_and_inherit.sql"
@@ -175,11 +219,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# python ./tools/version_iteration_tool/run_step5_to_step7.py \
-#     --runtime-env test \
-#     --backup-table lotro.text_main_bak_u46 \
-#     --next-table lotro.text_main_next \
-#     --map-table lotro.textIdMap_u46_to_u46_1 \
-#     --changes-table lotro.text_changes \
-#     --start-step 5 \
-#     --env .env
+    # python ./tools/version_iteration_tool/run_step5_to_step7.py --config ./tools/version_iteration_tool/run_step5_to_step7.yaml --env .env
