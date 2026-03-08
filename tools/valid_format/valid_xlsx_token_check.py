@@ -40,6 +40,14 @@ def _split_segments(text: str) -> List[str]:
     return text.split("|||")
 
 
+def _fix_bracket_text(text: str) -> str:
+    open_count = text.count("[")
+    close_count = text.count("]")
+    if open_count > close_count:
+        text = text + "]" * (open_count - close_count)
+    return text
+
+
 def _extract_segment_info(segment: str) -> Tuple[Optional[str], str]:
     segment = segment.strip()
     if not segment:
@@ -47,11 +55,11 @@ def _extract_segment_info(segment: str) -> Tuple[Optional[str], str]:
     # 4-10 位数字 + :::::: + [text]
     match = re.match(r"^(\d{4,10})::::::\[(.*)\]$", segment, re.DOTALL)
     if match:
-        return match.group(1), match.group(2)
+        return match.group(1), _fix_bracket_text(match.group(2))
     # 4-10 位数字 + ::: + 数字/范围 + ::: + [text]
     match = re.match(r"^(\d{4,10}):::[0-9-]+:::\[(.*)\]$", segment, re.DOTALL)
     if match:
-        return match.group(1), match.group(2)
+        return match.group(1), _fix_bracket_text(match.group(2))
     return None, segment
 
 

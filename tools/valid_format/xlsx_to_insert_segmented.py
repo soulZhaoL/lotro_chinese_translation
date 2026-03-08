@@ -338,7 +338,14 @@ def _parse_segment(
     )
     if matched is None:
         return None
-    return int(matched.group("textId")), matched.group("text")
+    text = matched.group("text")
+    # 正则末尾的 \]$ 可能误消耗 text 中游戏标签（如 [ps]）的结尾 ]。
+    # 若 text 里 [ 比 ] 多，说明有 ] 被协议结尾吃掉，补回差量。
+    open_count = text.count("[")
+    close_count = text.count("]")
+    if open_count > close_count:
+        text = text + "]" * (open_count - close_count)
+    return int(matched.group("textId")), text
 
 
 def _is_blank_row(fid: str, source_text: str, translated_text: str) -> bool:
