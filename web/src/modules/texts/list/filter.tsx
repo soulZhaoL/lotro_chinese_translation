@@ -198,10 +198,16 @@ export async function downloadFilteredFile(search: QueryParams): Promise<Downloa
   return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx");
 }
 
+export async function downloadPackageFile(search: QueryParams): Promise<DownloadFileResult> {
+  const query = buildDownloadQuery(search);
+  return downloadByPath(`/texts/download-package?${query.toString()}`, "text_work.xlsx");
+}
+
 type SearchActionBarProps = {
   dom: ReactNode[];
   uploading: boolean;
   onDownloadFiltered: () => void;
+  onDownloadPackage: () => void;
   onDownloadTemplate: () => void;
   onUpload: () => void;
 };
@@ -210,6 +216,7 @@ export function SearchActionBar({
   dom,
   uploading,
   onDownloadFiltered,
+  onDownloadPackage,
   onDownloadTemplate,
   onUpload,
 }: SearchActionBarProps) {
@@ -228,6 +235,7 @@ export function SearchActionBar({
       </Space>
       <Space wrap size={8}>
         <Button onClick={onDownloadFiltered}>导出</Button>
+        <Button onClick={onDownloadPackage}>下载汉化包</Button>
         <Button onClick={onDownloadTemplate}>下载模板</Button>
         <Button type="primary" loading={uploading} onClick={onUpload}>
           上传译文

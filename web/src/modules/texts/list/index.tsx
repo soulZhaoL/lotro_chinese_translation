@@ -13,6 +13,7 @@ import { createParentColumns } from "./table";
 import {
   SearchActionBar,
   downloadFilteredFile,
+  downloadPackageFile,
   downloadTemplateFile,
   hasAnyFilter,
   normalizeQueryParams,
@@ -120,6 +121,20 @@ export default function TextsList() {
     }
   }, [parentSearch]);
 
+  const handleDownloadPackage = useCallback(async () => {
+    const currentSearch = resolveSearchParams(formRef, parentSearch);
+    try {
+      const result = await downloadPackageFile(currentSearch);
+      if (result === "mock_unsupported") {
+        message.warning("Mock 模式不支持汉化包下载");
+        return;
+      }
+      message.success("汉化包下载成功");
+    } catch (error) {
+      message.error(getErrorMessage(error, "汉化包下载失败"));
+    }
+  }, [parentSearch]);
+
   const handleUploadFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     event.target.value = "";
@@ -215,6 +230,7 @@ export default function TextsList() {
               dom={dom}
               uploading={uploading}
               onDownloadFiltered={() => void handleDownloadFiltered()}
+              onDownloadPackage={() => void handleDownloadPackage()}
               onDownloadTemplate={() => void handleDownloadTemplate()}
               onUpload={() => fileInputRef.current?.click()}
             />,

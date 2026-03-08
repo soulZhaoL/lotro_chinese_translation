@@ -20,6 +20,7 @@ router = APIRouter(prefix="/texts", tags=["texts"])
 
 
 TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
+PACKAGE_HEADERS: Tuple[str, ...] = ("fid", "part_range", "sourceText", "translatedText")
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
 STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
@@ -150,6 +151,45 @@ def _cleanup_temp_file(path: str) -> None:
         os.remove(path)
     except FileNotFoundError:
         return
+
+
+def _format_part_range(parts: List[int]) -> str:
+    """将 part 列表压缩为范围字符串，如 [1,2,3,5,6] -> '1-3,5-6'，单个 part 输出 'n-n'。"""
+    if not parts:
+        return ""
+    sorted_parts = sorted(parts)
+    ranges = []
+    start = sorted_parts[0]
+    end = sorted_parts[0]
+    for p in sorted_parts[1:]:
+        if p == end + 1:
+            end = p
+        else:
+            ranges.append(f"{start}-{end}")
+            start = p
+            end = p
+    ranges.append(f"{start}-{end}")
+    return ",".join(ranges)
+
+
+def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str, str, str]:
+    """合并同一 fid 的多个 part 为一行 Excel 数据，还原 textId:::::::[text] 协议格式。
+    空译文取原文填充。返回 (fid, part_range, sourceText, translatedText)。
+    """
+    fid = fid_rows[0]["fid"]
+    parts = [row["part"] for row in fid_rows]
+    part_range = _format_part_range(parts)
+
+    source_segments = []
+    translated_segments = []
+    for row in fid_rows:
+        text_id = row["textId"]
+        source = row["sourceText"] or ""
+        translated = row["translatedText"] or source
+        source_segments.append(f"{text_id}::::::[{source}]")
+        translated_segments.append(f"{text_id}::::::[{translated}]")
+
+    return fid, part_range, "|||".join(source_segments), "|||".join(translated_segments)
 
 
 def _build_download_conditions(
@@ -744,6 +784,123 @@ def download_texts(
     return FileResponse(
         path=tmp_path,
         filename=export_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=BackgroundTask(_cleanup_temp_file, tmp_path),
+    )
+
+
+@router.get("/download-package")
+def download_package(
+    fid: Optional[str] = None,
+    status_filter: Optional[int] = Query(default=None, alias="status"),
+    sourceKeyword: Optional[str] = None,
+    translatedKeyword: Optional[str] = None,
+    updatedFrom: Optional[str] = None,
+    updatedTo: Optional[str] = None,
+    claimer: Optional[str] = None,
+    claimed: Optional[bool] = None,
+    _: Dict[str, Any] = Depends(require_auth),
+):
+    """下载汉化包：按 fid 分组合并所有 part，还原 textId:::::::[text] 原始协议格式。
+    流式查询 + 逐 fid flush，避免 80 万行全量加载导致内存溢出。
+    """
+    config = get_config()
+    text_import_export = config["text_import_export"]
+    max_download_rows = text_import_export["max_download_rows"]
+    download_fetch_batch_size = text_import_export["download_fetch_batch_size"]
+    download_temp_dir = text_import_export["download_temp_dir"]
+
+    if not os.path.isdir(download_temp_dir):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="导出临时目录不存在")
+
+    conditions, params = _build_download_conditions(
+        fid=fid,
+        status_filter=status_filter,
+        sourceKeyword=sourceKeyword,
+        translatedKeyword=translatedKeyword,
+        updatedFrom=updatedFrom,
+        updatedTo=updatedTo,
+        claimer=claimer,
+        claimed=claimed,
+    )
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet(title="texts")
+    sheet.append(list(PACKAGE_HEADERS))
+
+    # 逐 fid 流式处理：内存中只保留当前 fid 的行缓冲
+    current_fid: Optional[str] = None
+    current_fid_rows: List[Dict[str, Any]] = []
+    output_fid_count = 0
+    tmp_path: Optional[str] = None
+
+    def flush_fid() -> None:
+        nonlocal output_fid_count
+        if not current_fid_rows:
+            return
+        if output_fid_count >= max_download_rows:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
+            )
+        merged = _merge_fid_rows(current_fid_rows)
+        sheet.append(list(merged))
+        output_fid_count += 1
+
+    try:
+        with db_stream_cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                  tm.fid,
+                  tm."textId" AS "textId",
+                  tm.part,
+                  tm."sourceText" AS "sourceText",
+                  tm."translatedText" AS "translatedText"
+                FROM text_main tm
+                {where_clause}
+                ORDER BY tm.fid ASC, tm.part ASC
+                """,
+                tuple(params),
+            )
+            while True:
+                rows = cursor.fetchmany(download_fetch_batch_size)
+                if not rows:
+                    break
+                for row in rows:
+                    row_fid = row["fid"]
+                    if row_fid != current_fid:
+                        flush_fid()
+                        current_fid = row_fid
+                        current_fid_rows = [row]
+                    else:
+                        current_fid_rows.append(row)
+
+        flush_fid()  # 最后一个 fid
+
+        if output_fid_count == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
+
+        tmp_file = NamedTemporaryFile(
+            prefix="tmp_package_export_",
+            suffix=".xlsx",
+            dir=download_temp_dir,
+            delete=False,
+        )
+        tmp_path = tmp_file.name
+        tmp_file.close()
+        workbook.save(tmp_path)
+    except Exception:
+        workbook.close()
+        if tmp_path is not None:
+            _cleanup_temp_file(tmp_path)
+        raise
+    workbook.close()
+
+    return FileResponse(
+        path=tmp_path,
+        filename="text_work.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         background=BackgroundTask(_cleanup_temp_file, tmp_path),
     )

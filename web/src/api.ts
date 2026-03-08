@@ -78,12 +78,20 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
           message: typeof payload.message === "string" ? payload.message : undefined,
         });
       }
+      if (payload.code === "0401") {
+        clearToken();
+        window.location.href = "/login";
+      }
       throw new Error(payload.message || "请求失败");
     }
     return payload.data as T;
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.location.href = "/login";
+    }
     if (response.status === 503) {
       setMaintenanceState({ enabled: true });
     }
