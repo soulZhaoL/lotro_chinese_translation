@@ -14,17 +14,17 @@ function normalizeString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function normalizeStatus(value: unknown): number | undefined {
+function normalizeStatus(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") {
     return undefined;
   }
   if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
+    return String(value);
   }
   if (typeof value === "string") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) {
-      return parsed;
+      return value;
     }
   }
   return undefined;
