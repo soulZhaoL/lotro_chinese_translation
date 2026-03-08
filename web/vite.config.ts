@@ -61,19 +61,6 @@ function parseYamlString(rawValue: string, field: string): string {
   return inner.replaceAll('\\"', '"').replaceAll("\\\\", "\\");
 }
 
-function parseViteBool(value: string | undefined, key: string): boolean {
-  if (value === undefined) {
-    throw new Error(`前端环境变量缺失: ${key}`);
-  }
-  if (value === "true") {
-    return true;
-  }
-  if (value === "false") {
-    return false;
-  }
-  throw new Error(`前端环境变量无效: ${key} 仅支持 true/false`);
-}
-
 function requireViteString(value: string | undefined, key: string): string {
   if (value === undefined) {
     throw new Error(`前端环境变量缺失: ${key}`);
@@ -407,9 +394,9 @@ function buildLocalMockPlugin(mockDir: string) {
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const isServe = command === "serve";
-  const useMockFlag = parseViteBool(env.VITE_USE_MOCK, "VITE_USE_MOCK");
+  const useMockFlag = mode === "mock";
   if (!isServe && useMockFlag) {
-    throw new Error("生产构建禁止启用 Mock: VITE_USE_MOCK 必须为 false");
+    throw new Error("生产构建禁止启用 Mock: --mode mock 仅限开发环境");
   }
   if (!useMockFlag) {
     requireViteString(env.VITE_API_BASE_URL, "VITE_API_BASE_URL");

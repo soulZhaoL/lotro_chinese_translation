@@ -5,7 +5,7 @@ import type { ProFormInstance } from "@ant-design/pro-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { getErrorMessage, getToken } from "../../../api";
+import { apiFetch, getErrorMessage } from "../../../api";
 import { getAppConfig } from "../../../config";
 import { parseStoredListState, saveListState } from "../storage";
 import type { ActiveConfirmState, ListStateSnapshot, QueryParams, TextItem, TextListResponse } from "../types";
@@ -153,39 +153,20 @@ export default function TextsList() {
         message.warning("Mock 模式不支持模板上传");
         return;
       }
-      const apiBase = config.apiBaseUrl;
-      if (!apiBase) {
-        throw new Error("缺少 apiBaseUrl");
-      }
-      const token = getToken();
-      if (!token) {
-        throw new Error("未登录或登录已失效");
-      }
 
       const query = new URLSearchParams();
       query.set("fileName", selectedFile.name);
       query.set("reason", "模板批量上传");
 
-      const response = await fetch(`${apiBase}/texts/upload?${query.toString()}`, {
+      const result = await apiFetch<{ updatedCount?: number }>(`/texts/upload?${query.toString()}`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         },
         body: selectedFile,
       });
-      const payload = (await response.json()) as {
-        success?: boolean;
-        code?: string;
-        message?: string;
-        data?: { updatedCount?: number };
-      };
 
-      if (!response.ok || !payload.success || payload.code !== "0000") {
-        throw new Error(payload.message || "上传失败");
-      }
-
-      message.success(`上传成功，更新 ${payload.data?.updatedCount || 0} 条`);
+      message.success(`上传成功，更新 ${result.updatedCount || 0} 条`);
       actionRef.current?.reload();
     } catch (error) {
       message.error(getErrorMessage(error, "上传失败"));
@@ -274,30 +255,7 @@ export default function TextsList() {
             if (normalized.claimer) query.set("claimer", normalized.claimer);
             if (normalized.claimed !== undefined) query.set("claimed", String(normalized.claimed));
 
-            const config = getAppConfig();
-            const apiBase = config.useMock ? "/api" : config.apiBaseUrl;
-            if (!apiBase) {
-              throw new Error("缺少 apiBaseUrl");
-            }
-            const token = getToken();
-            const headers = new Headers();
-            if (token) {
-              headers.set("Authorization", `Bearer ${token}`);
-            }
-
-            const response = await fetch(`${apiBase}/texts?${query.toString()}`, {
-              method: "GET",
-              headers,
-            });
-            const payload = (await response.json()) as {
-              code?: string;
-              message?: string;
-              data?: TextListResponse;
-            };
-            if (!response.ok || payload.code !== "0000" || !payload.data) {
-              throw new Error(payload.message || "加载列表失败");
-            }
-            const data = payload.data;
+            const data = await apiFetch<TextListResponse>(`/texts?${query.toString()}`);
 
             return {
               data: data.items,

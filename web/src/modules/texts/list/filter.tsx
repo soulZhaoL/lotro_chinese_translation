@@ -2,7 +2,7 @@ import type { ProFormInstance } from "@ant-design/pro-form";
 import { Button, Space } from "antd";
 import type { MutableRefObject, ReactNode } from "react";
 
-import { getToken } from "../../../api";
+import { getToken, redirectToLogin } from "../../../api";
 import { getAppConfig } from "../../../config";
 import type { QueryParams } from "../types";
 
@@ -164,6 +164,9 @@ async function downloadByPath(path: string, fallbackName: string): Promise<Downl
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      redirectToLogin();
+    }
     let errorMessage = "下载失败";
     try {
       const payload = await response.json();
