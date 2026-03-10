@@ -20,7 +20,7 @@ router = APIRouter(prefix="/texts", tags=["texts"])
 
 
 TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
-PACKAGE_HEADERS: Tuple[str, ...] = ("fid", "part_range", "sourceText", "translatedText")
+PACKAGE_HEADERS: Tuple[str, ...] = ("fid", "translation")
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
 STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
@@ -172,24 +172,19 @@ def _format_part_range(parts: List[int]) -> str:
     return ",".join(ranges)
 
 
-def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str, str, str]:
-    """合并同一 fid 的多个 part 为一行 Excel 数据，还原 textId:::::::[text] 协议格式。
-    空译文取原文填充。返回 (fid, part_range, sourceText, translatedText)。
+def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str]:
+    """合并同一 fid 的多个 part 为一行 Excel 数据，还原 textId::::::[text] 协议格式。
+    空译文取原文填充。返回 (fid, translation)。
     """
     fid = fid_rows[0]["fid"]
-    parts = [row["part"] for row in fid_rows]
-    part_range = _format_part_range(parts)
-
-    source_segments = []
     translated_segments = []
     for row in fid_rows:
         text_id = row["textId"]
         source = row["sourceText"] or ""
         translated = row["translatedText"] or source
-        source_segments.append(f"{text_id}::::::[{source}]")
         translated_segments.append(f"{text_id}::::::[{translated}]")
 
-    return fid, part_range, "|||".join(source_segments), "|||".join(translated_segments)
+    return fid, "|||".join(translated_segments)
 
 
 def _build_download_conditions(

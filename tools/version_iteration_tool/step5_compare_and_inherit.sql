@@ -10,36 +10,31 @@ CREATE PROCEDURE step5_compare_and_inherit(
 BEGIN
     DECLARE msg TEXT;
 
-    SET @sql = CONCAT('ANALYZE TABLE ', p_backup_table, ', ', p_next_table);
-    PREPARE stmt FROM @sql;
-    EXECUTE stmt;
-    DEALLOCATE PREPARE stmt;
-
     SET @sql = CONCAT(
         'SELECT COUNT(*) INTO @backup_dup_key_cnt FROM (',
-        'SELECT fid, `textId`, part, COUNT(*) c FROM ', p_backup_table, ' ',
-        'GROUP BY fid, `textId`, part HAVING COUNT(*) > 1',
+        'SELECT fid, `textId`, COUNT(*) c FROM ', p_backup_table, ' ',
+        'GROUP BY fid, `textId` HAVING COUNT(*) > 1',
         ') t'
     );
     PREPARE stmt FROM @sql;
     EXECUTE stmt;
     DEALLOCATE PREPARE stmt;
     IF @backup_dup_key_cnt > 0 THEN
-        SET msg = CONCAT('备份表存在重复 key(fid,textId,part)，数量=', @backup_dup_key_cnt);
+        SET msg = CONCAT('备份表存在重复 key(fid,textId)，数量=', @backup_dup_key_cnt);
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg;
     END IF;
 
     SET @sql = CONCAT(
         'SELECT COUNT(*) INTO @next_dup_key_cnt FROM (',
-        'SELECT fid, `textId`, part, COUNT(*) c FROM ', p_next_table, ' ',
-        'GROUP BY fid, `textId`, part HAVING COUNT(*) > 1',
+        'SELECT fid, `textId`, COUNT(*) c FROM ', p_next_table, ' ',
+        'GROUP BY fid, `textId` HAVING COUNT(*) > 1',
         ') t'
     );
     PREPARE stmt FROM @sql;
     EXECUTE stmt;
     DEALLOCATE PREPARE stmt;
     IF @next_dup_key_cnt > 0 THEN
-        SET msg = CONCAT('next表存在重复 key(fid,textId,part)，数量=', @next_dup_key_cnt);
+        SET msg = CONCAT('next表存在重复 key(fid,textId)，数量=', @next_dup_key_cnt);
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg;
     END IF;
 
@@ -81,7 +76,7 @@ BEGIN
         'END AS class ',
         'FROM ', p_next_table, ' AS nxt ',
         'LEFT JOIN ', p_backup_table, ' AS bak ',
-        'ON nxt.fid = bak.fid AND nxt.`textId` = bak.`textId` AND nxt.part = bak.part'
+        'ON nxt.fid = bak.fid AND nxt.`textId` = bak.`textId`'
     );
     PREPARE stmt FROM @sql;
     EXECUTE stmt;

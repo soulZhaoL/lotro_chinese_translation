@@ -3,8 +3,8 @@
 base_dir: "__PROJECT_ROOT__"
 
 input:
-  # path: "work_text/U46.01.xlsx"
-  path: "work_text/U46.1.xlsx"
+  path: "work_text/U46.01.xlsx"
+  # path: "work_text/U46.1.xlsx"
   sheet: "Sheet1"
   row_start: 2
   row_end: "max"
@@ -19,10 +19,10 @@ parsing:
   idPattern: "\\d{2,10}"
 
 output:
-  # path: "work_text/text_main_segmented_insert.sql"
-  # table: "text_main"
-  path: "work_text/text_main_segmented_insert1.sql"
-  table: "text_main_next"
+  path: "work_text/text_main_segmented_insert.sql"
+  table: "text_main"
+  # path: "work_text/text_main_segmented_insert1.sql"
+  # table: "text_main_next"
   chunkSize: 20000
   overwrite: true
   columns:
