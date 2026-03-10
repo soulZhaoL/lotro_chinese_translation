@@ -871,7 +871,7 @@ def download_package(
         tmp_path: Optional[str] = None
 
         try:
-            with db_stream_cursor() as cursor:
+            with db_cursor() as cursor:
                 cursor.execute(
                     f"""
                     SELECT
@@ -888,24 +888,21 @@ def download_package(
                     """,
                     tuple(params),
                 )
-                while True:
-                    rows = cursor.fetchmany(download_fetch_batch_size)
-                    if not rows:
-                        break
-                    for row in rows:
-                        output_fid_count += 1
-                        if output_fid_count > max_download_rows:
-                            raise HTTPException(
-                                status_code=status.HTTP_400_BAD_REQUEST,
-                                detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
-                            )
-                        translation = row["translation"] or ""
-                        if len(translation) > _EXCEL_CELL_CHAR_LIMIT:
-                            logger.warning(f"fid={row['fid']} translation 超过 Excel 单元格字符上限，按 segment 边界分行")
-                            for split_row in _split_translation_into_rows(row["fid"], translation):
-                                sheet.append(split_row)
-                        else:
-                            sheet.append([row["fid"], translation])
+                rows_all = cursor.fetchall()
+                for row in rows_all:
+                    output_fid_count += 1
+                    if output_fid_count > max_download_rows:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
+                        )
+                    translation = row["translation"] or ""
+                    if len(translation) > _EXCEL_CELL_CHAR_LIMIT:
+                        logger.warning(f"fid={row['fid']} translation 超过 Excel 单元格字符上限，按 segment 边界分行")
+                        for split_row in _split_translation_into_rows(row["fid"], translation):
+                            sheet.append(split_row)
+                    else:
+                        sheet.append([row["fid"], translation])
 
             if output_fid_count == 0:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
