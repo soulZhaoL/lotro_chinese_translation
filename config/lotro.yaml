@@ -50,4 +50,5 @@ text_import_export:
   max_upload_rows: 5000
   max_download_rows: 1000000
   download_fetch_batch_size: 2000
+  download_progress_log_every_batches: 10
   download_temp_dir: "/tmp"
