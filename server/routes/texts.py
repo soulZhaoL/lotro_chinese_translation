@@ -1,5 +1,6 @@
 # 主文本列表与详情路由。
 import os
+import threading
 from datetime import datetime
 from io import BytesIO
 from tempfile import NamedTemporaryFile
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/texts", tags=["texts"])
 TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
 PACKAGE_HEADERS: Tuple[str, ...] = ("fid", "translation")
 _EXCEL_CELL_CHAR_LIMIT = 32767
+_package_download_lock = threading.Semaphore(1)
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
 STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
@@ -191,7 +193,7 @@ def _split_translation_into_rows(fid: str, translation: str) -> List[List[str]]:
             current_parts.append(seg)
             current_len = seg_len
         else:
-            if current_len + sep_len + seg_len > _EXCEL_CELL_CHAR_LIMIT:
+            if current_len + sep_len + seg_len > _EXCEL_CELL_CHAR_LIMIT - sep_len:
                 rows.append([fid, "|||".join(current_parts) + "|||"])
                 current_parts = [seg]
                 current_len = seg_len
@@ -832,90 +834,99 @@ def download_package(
     """下载汉化包：GROUP_CONCAT 在 MySQL 端合并同 fid 的所有 part，还原 textId::::::[text] 协议格式。
     网络传输从 80 万行压缩到 N 行（N = fid 数量），Python 端直接写入 xlsx。
     translation 超过单元格字符限制时按 segment 边界自动分行，不截断任何 segment。
+    使用进程内信号量避免并发导出拖垮系统。
     """
-    config = get_config()
-    text_import_export = config["text_import_export"]
-    max_download_rows = text_import_export["max_download_rows"]
-    download_fetch_batch_size = text_import_export["download_fetch_batch_size"]
-    download_temp_dir = text_import_export["download_temp_dir"]
-
-    if not os.path.isdir(download_temp_dir):
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="导出临时目录不存在")
-
-    conditions, params = _build_download_conditions(
-        fid=fid,
-        status_filter=status_filter,
-        sourceKeyword=sourceKeyword,
-        translatedKeyword=translatedKeyword,
-        updatedFrom=updatedFrom,
-        updatedTo=updatedTo,
-        claimer=claimer,
-        claimed=claimed,
-    )
-    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-
-    workbook = Workbook(write_only=True)
-    sheet = workbook.create_sheet(title="texts")
-    sheet.append(list(PACKAGE_HEADERS))
-
-    output_fid_count = 0
-    tmp_path: Optional[str] = None
-
-    try:
-        with db_stream_cursor() as cursor:
-            cursor.execute(
-                f"""
-                SELECT
-                  tm.fid,
-                  GROUP_CONCAT(
-                    CONCAT(CAST(tm."textId" AS CHAR), '::::::[', COALESCE(tm."translatedText", tm."sourceText", ''), ']')
-                    ORDER BY tm.part ASC
-                    SEPARATOR '|||'
-                  ) AS translation
-                FROM text_main tm
-                {where_clause}
-                GROUP BY tm.fid
-                ORDER BY tm.fid ASC
-                """,
-                tuple(params),
-            )
-            while True:
-                rows = cursor.fetchmany(download_fetch_batch_size)
-                if not rows:
-                    break
-                for row in rows:
-                    output_fid_count += 1
-                    if output_fid_count > max_download_rows:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
-                        )
-                    translation = row["translation"] or ""
-                    if len(translation) > _EXCEL_CELL_CHAR_LIMIT:
-                        logger.warning(f"fid={row['fid']} translation 超过 Excel 单元格字符上限，按 segment 边界分行")
-                        for split_row in _split_translation_into_rows(row["fid"], translation):
-                            sheet.append(split_row)
-                    else:
-                        sheet.append([row["fid"], translation])
-
-        if output_fid_count == 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
-
-        tmp_file = NamedTemporaryFile(
-            prefix="tmp_package_export_",
-            suffix=".xlsx",
-            dir=download_temp_dir,
-            delete=False,
+    if not _package_download_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="汉化包正在生成中，请稍后再试",
         )
-        tmp_path = tmp_file.name
-        tmp_file.close()
-        workbook.save(tmp_path)
-    except Exception:
+    try:
+        config = get_config()
+        text_import_export = config["text_import_export"]
+        max_download_rows = text_import_export["max_download_rows"]
+        download_fetch_batch_size = text_import_export["download_fetch_batch_size"]
+        download_temp_dir = text_import_export["download_temp_dir"]
+
+        if not os.path.isdir(download_temp_dir):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="导出临时目录不存在")
+
+        conditions, params = _build_download_conditions(
+            fid=fid,
+            status_filter=status_filter,
+            sourceKeyword=sourceKeyword,
+            translatedKeyword=translatedKeyword,
+            updatedFrom=updatedFrom,
+            updatedTo=updatedTo,
+            claimer=claimer,
+            claimed=claimed,
+        )
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        workbook = Workbook(write_only=True)
+        sheet = workbook.create_sheet(title="texts")
+        sheet.append(list(PACKAGE_HEADERS))
+
+        output_fid_count = 0
+        tmp_path: Optional[str] = None
+
+        try:
+            with db_stream_cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT
+                      tm.fid,
+                      GROUP_CONCAT(
+                        CONCAT(CAST(tm."textId" AS CHAR), '::::::[', COALESCE(tm."translatedText", tm."sourceText", ''), ']')
+                        ORDER BY tm.part ASC
+                        SEPARATOR '|||'
+                      ) AS translation
+                    FROM text_main tm
+                    {where_clause}
+                    GROUP BY tm.fid
+                    ORDER BY tm.fid ASC
+                    """,
+                    tuple(params),
+                )
+                while True:
+                    rows = cursor.fetchmany(download_fetch_batch_size)
+                    if not rows:
+                        break
+                    for row in rows:
+                        output_fid_count += 1
+                        if output_fid_count > max_download_rows:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
+                            )
+                        translation = row["translation"] or ""
+                        if len(translation) > _EXCEL_CELL_CHAR_LIMIT:
+                            logger.warning(f"fid={row['fid']} translation 超过 Excel 单元格字符上限，按 segment 边界分行")
+                            for split_row in _split_translation_into_rows(row["fid"], translation):
+                                sheet.append(split_row)
+                        else:
+                            sheet.append([row["fid"], translation])
+
+            if output_fid_count == 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
+
+            tmp_file = NamedTemporaryFile(
+                prefix="tmp_package_export_",
+                suffix=".xlsx",
+                dir=download_temp_dir,
+                delete=False,
+            )
+            tmp_path = tmp_file.name
+            tmp_file.close()
+            workbook.save(tmp_path)
+        except Exception:
+            workbook.close()
+            if tmp_path is not None:
+                _cleanup_temp_file(tmp_path)
+            raise
         workbook.close()
-        if tmp_path is not None:
-            _cleanup_temp_file(tmp_path)
-        raise
-    workbook.close()
+    finally:
+        _package_download_lock.release()
 
     return FileResponse(
         path=tmp_path,
