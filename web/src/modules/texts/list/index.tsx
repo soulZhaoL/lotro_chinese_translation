@@ -12,6 +12,7 @@ import type { ActiveConfirmState, ListStateSnapshot, QueryParams, TextItem, Text
 import { createParentColumns } from "./table";
 import {
   SearchActionBar,
+  type DownloadProgressSnapshot,
   downloadFilteredFile,
   downloadPackageFile,
   downloadTemplateFile,
@@ -37,6 +38,7 @@ export default function TextsList() {
   const [restoreReady, setRestoreReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingPackage, setDownloadingPackage] = useState(false);
+  const [packageDownloadStageText, setPackageDownloadStageText] = useState("下载汉化包");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const buildListState = useCallback((): ListStateSnapshot => {
@@ -127,9 +129,23 @@ export default function TextsList() {
       return;
     }
     setDownloadingPackage(true);
+    setPackageDownloadStageText("汉化包生成中...");
     const currentSearch = resolveSearchParams(formRef, parentSearch);
     try {
-      const result = await downloadPackageFile(currentSearch);
+      const result = await downloadPackageFile(currentSearch, {
+        onProgress: (progress: DownloadProgressSnapshot) => {
+          if (progress.stage === "preparing") {
+            setPackageDownloadStageText("汉化包生成中...");
+            return;
+          }
+          if (progress.percent !== null) {
+            setPackageDownloadStageText(`汉化包传输中 ${progress.percent}%`);
+            return;
+          }
+          const receivedMb = (progress.loadedBytes / (1024 * 1024)).toFixed(1);
+          setPackageDownloadStageText(`汉化包传输中 ${receivedMb}MB`);
+        },
+      });
       if (result === "mock_unsupported") {
         message.warning("Mock 模式不支持汉化包下载");
         return;
@@ -139,6 +155,7 @@ export default function TextsList() {
       message.error(getErrorMessage(error, "汉化包下载失败"));
     } finally {
       setDownloadingPackage(false);
+      setPackageDownloadStageText("下载汉化包");
     }
   }, [downloadingPackage, parentSearch]);
 
@@ -218,6 +235,7 @@ export default function TextsList() {
               dom={dom}
               uploading={uploading}
               downloadingPackage={downloadingPackage}
+              packageDownloadText={packageDownloadStageText}
               onDownloadFiltered={() => void handleDownloadFiltered()}
               onDownloadPackage={() => void handleDownloadPackage()}
               onDownloadTemplate={() => void handleDownloadTemplate()}

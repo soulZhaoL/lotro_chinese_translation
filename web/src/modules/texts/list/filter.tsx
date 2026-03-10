@@ -142,7 +142,43 @@ function parseContentDispositionFileName(contentDisposition: string | null, fall
 
 export type DownloadFileResult = "downloaded" | "mock_unsupported";
 
-async function downloadByPath(path: string, fallbackName: string): Promise<DownloadFileResult> {
+export type DownloadProgressStage = "preparing" | "transferring";
+
+export type DownloadProgressSnapshot = {
+  stage: DownloadProgressStage;
+  loadedBytes: number;
+  totalBytes: number | null;
+  percent: number | null;
+};
+
+type DownloadProgressHandler = (snapshot: DownloadProgressSnapshot) => void;
+
+type DownloadOptions = {
+  onProgress?: DownloadProgressHandler;
+};
+
+function parseContentLength(headerValue: string | null): number | null {
+  if (!headerValue) {
+    return null;
+  }
+  const parsed = Number(headerValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function calcProgressPercent(loadedBytes: number, totalBytes: number | null): number | null {
+  if (!totalBytes || totalBytes <= 0) {
+    return null;
+  }
+  const ratio = (loadedBytes / totalBytes) * 100;
+  const bounded = Math.max(0, Math.min(100, ratio));
+  return Math.floor(bounded);
+}
+
+async function downloadByPath(path: string, fallbackName: string, options?: DownloadOptions): Promise<DownloadFileResult> {
+  const onProgress = options?.onProgress;
   const config = getAppConfig();
   if (config.useMock) {
     return "mock_unsupported";
@@ -155,6 +191,13 @@ async function downloadByPath(path: string, fallbackName: string): Promise<Downl
   if (!token) {
     throw new Error("未登录或登录已失效");
   }
+
+  onProgress?.({
+    stage: "preparing",
+    loadedBytes: 0,
+    totalBytes: null,
+    percent: null,
+  });
 
   const response = await fetch(`${apiBase}${path}`, {
     method: "GET",
@@ -180,7 +223,55 @@ async function downloadByPath(path: string, fallbackName: string): Promise<Downl
   }
 
   const fileName = parseContentDispositionFileName(response.headers.get("Content-Disposition"), fallbackName);
-  const blob = await response.blob();
+  const totalBytes = parseContentLength(response.headers.get("Content-Length"));
+  let loadedBytes = 0;
+  onProgress?.({
+    stage: "transferring",
+    loadedBytes,
+    totalBytes,
+    percent: calcProgressPercent(loadedBytes, totalBytes),
+  });
+
+  let blob: Blob;
+  if (response.body) {
+    const reader = response.body.getReader();
+    const chunks: BlobPart[] = [];
+    let lastEmitMs = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value) {
+        continue;
+      }
+      chunks.push(value as BlobPart);
+      loadedBytes += value.length;
+      const now = Date.now();
+      if (now - lastEmitMs >= 120) {
+        lastEmitMs = now;
+        onProgress?.({
+          stage: "transferring",
+          loadedBytes,
+          totalBytes,
+          percent: calcProgressPercent(loadedBytes, totalBytes),
+        });
+      }
+    }
+    blob = new Blob(chunks);
+  } else {
+    blob = await response.blob();
+    loadedBytes = blob.size;
+  }
+
+  onProgress?.({
+    stage: "transferring",
+    loadedBytes,
+    totalBytes: totalBytes ?? blob.size,
+    percent: 100,
+  });
+
   const objectUrl = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = objectUrl;
@@ -201,15 +292,16 @@ export async function downloadFilteredFile(search: QueryParams): Promise<Downloa
   return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx");
 }
 
-export async function downloadPackageFile(search: QueryParams): Promise<DownloadFileResult> {
+export async function downloadPackageFile(search: QueryParams, options?: DownloadOptions): Promise<DownloadFileResult> {
   const query = buildDownloadQuery(search);
-  return downloadByPath(`/texts/download-package?${query.toString()}`, "text_work.xlsx");
+  return downloadByPath(`/texts/download-package?${query.toString()}`, "text_work.xlsx", options);
 }
 
 type SearchActionBarProps = {
   dom: ReactNode[];
   uploading: boolean;
   downloadingPackage: boolean;
+  packageDownloadText: string;
   onDownloadFiltered: () => void;
   onDownloadPackage: () => void;
   onDownloadTemplate: () => void;
@@ -220,6 +312,7 @@ export function SearchActionBar({
   dom,
   uploading,
   downloadingPackage,
+  packageDownloadText,
   onDownloadFiltered,
   onDownloadPackage,
   onDownloadTemplate,
@@ -240,7 +333,9 @@ export function SearchActionBar({
       </Space>
       <Space wrap size={8}>
         <Button onClick={onDownloadFiltered}>导出</Button>
-        <Button loading={downloadingPackage} onClick={onDownloadPackage}>下载汉化包</Button>
+        <Button loading={downloadingPackage} onClick={onDownloadPackage}>
+          {packageDownloadText}
+        </Button>
         <Button onClick={onDownloadTemplate}>下载模板</Button>
         <Button type="primary" loading={uploading} onClick={onUpload}>
           上传译文
