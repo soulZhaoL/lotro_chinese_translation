@@ -2,6 +2,7 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
 from pydantic import BaseModel
 
 from ..config import get_config
@@ -116,6 +117,7 @@ def list_dictionary(
 @router.post("")
 def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depends(require_auth)):
     """新增词典条目。"""
+    logger.info(f"Dict create: termKey={request.termKey} category={request.category}")
     with db_cursor() as cursor:
         cursor.execute(
             """
@@ -126,12 +128,14 @@ def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depe
         )
         entry_id = cursor.lastrowid
 
+    logger.info(f"Dict created: entryId={entry_id} termKey={request.termKey}")
     return success_response({"id": entry_id})
 
 
 @router.put("/{entryId}")
 def update_dictionary(entryId: int, request: DictionaryUpdateRequest, _: Dict[str, Any] = Depends(require_auth)):
     """更新词典条目。"""
+    logger.info(f"Dict update: entryId={entryId} termKey={request.termKey} isActive={request.isActive}")
     with db_cursor() as cursor:
         cursor.execute("SELECT id FROM dictionary_entries WHERE id = %s", (entryId,))
         if cursor.fetchone() is None:

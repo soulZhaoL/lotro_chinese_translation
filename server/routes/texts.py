@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from loguru import logger
 from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/texts", tags=["texts"])
 
 TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
 PACKAGE_HEADERS: Tuple[str, ...] = ("fid", "translation")
+_EXCEL_CELL_CHAR_LIMIT = 32767
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
 STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
@@ -170,6 +172,37 @@ def _format_part_range(parts: List[int]) -> str:
             end = p
     ranges.append(f"{start}-{end}")
     return ",".join(ranges)
+
+
+def _split_translation_into_rows(fid: str, translation: str) -> List[List[str]]:
+    """将超长 translation 按 ||| segment 边界拆分为多行写入 xlsx。
+    segment（textId::::::[text]）为最小原子单位，绝不在内部截断。
+    非末行末尾追加 '|||' 表示续行；单个 segment 超过 limit 时独占一行（完整保留）。
+    """
+    segments = translation.split("|||")
+    rows: List[List[str]] = []
+    current_parts: List[str] = []
+    current_len = 0
+    sep_len = 3  # len("|||")
+
+    for seg in segments:
+        seg_len = len(seg)
+        if not current_parts:
+            current_parts.append(seg)
+            current_len = seg_len
+        else:
+            if current_len + sep_len + seg_len > _EXCEL_CELL_CHAR_LIMIT:
+                rows.append([fid, "|||".join(current_parts) + "|||"])
+                current_parts = [seg]
+                current_len = seg_len
+            else:
+                current_parts.append(seg)
+                current_len += sep_len + seg_len
+
+    if current_parts:
+        rows.append([fid, "|||".join(current_parts)])
+
+    return rows
 
 
 def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str]:
@@ -796,8 +829,9 @@ def download_package(
     claimed: Optional[bool] = None,
     _: Dict[str, Any] = Depends(require_auth),
 ):
-    """下载汉化包：按 fid 分组合并所有 part，还原 textId:::::::[text] 原始协议格式。
-    流式查询 + 逐 fid flush，避免 80 万行全量加载导致内存溢出。
+    """下载汉化包：GROUP_CONCAT 在 MySQL 端合并同 fid 的所有 part，还原 textId::::::[text] 协议格式。
+    网络传输从 80 万行压缩到 N 行（N = fid 数量），Python 端直接写入 xlsx。
+    translation 超过单元格字符限制时按 segment 边界自动分行，不截断任何 segment。
     """
     config = get_config()
     text_import_export = config["text_import_export"]
@@ -824,24 +858,8 @@ def download_package(
     sheet = workbook.create_sheet(title="texts")
     sheet.append(list(PACKAGE_HEADERS))
 
-    # 逐 fid 流式处理：内存中只保留当前 fid 的行缓冲
-    current_fid: Optional[str] = None
-    current_fid_rows: List[Dict[str, Any]] = []
     output_fid_count = 0
     tmp_path: Optional[str] = None
-
-    def flush_fid() -> None:
-        nonlocal output_fid_count
-        if not current_fid_rows:
-            return
-        if output_fid_count >= max_download_rows:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
-            )
-        merged = _merge_fid_rows(current_fid_rows)
-        sheet.append(list(merged))
-        output_fid_count += 1
 
     try:
         with db_stream_cursor() as cursor:
@@ -849,13 +867,15 @@ def download_package(
                 f"""
                 SELECT
                   tm.fid,
-                  tm."textId" AS "textId",
-                  tm.part,
-                  tm."sourceText" AS "sourceText",
-                  tm."translatedText" AS "translatedText"
+                  GROUP_CONCAT(
+                    CONCAT(CAST(tm."textId" AS CHAR), '::::::[', COALESCE(tm."translatedText", tm."sourceText", ''), ']')
+                    ORDER BY tm.part ASC
+                    SEPARATOR '|||'
+                  ) AS translation
                 FROM text_main tm
                 {where_clause}
-                ORDER BY tm.fid ASC, tm.part ASC
+                GROUP BY tm.fid
+                ORDER BY tm.fid ASC
                 """,
                 tuple(params),
             )
@@ -864,15 +884,19 @@ def download_package(
                 if not rows:
                     break
                 for row in rows:
-                    row_fid = row["fid"]
-                    if row_fid != current_fid:
-                        flush_fid()
-                        current_fid = row_fid
-                        current_fid_rows = [row]
+                    output_fid_count += 1
+                    if output_fid_count > max_download_rows:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
+                        )
+                    translation = row["translation"] or ""
+                    if len(translation) > _EXCEL_CELL_CHAR_LIMIT:
+                        logger.warning(f"fid={row['fid']} translation 超过 Excel 单元格字符上限，按 segment 边界分行")
+                        for split_row in _split_translation_into_rows(row["fid"], translation):
+                            sheet.append(split_row)
                     else:
-                        current_fid_rows.append(row)
-
-        flush_fid()  # 最后一个 fid
+                        sheet.append([row["fid"], translation])
 
         if output_fid_count == 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
@@ -909,6 +933,7 @@ async def upload_text_template(
     user: Dict[str, Any] = Depends(require_auth),
 ):
     """按模板上传翻译结果并覆盖译文与状态。"""
+    logger.info(f"Upload start: fileName={fileName} userId={user['userId']} reason={reason}")
     if not fileName:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件缺少文件名")
     if not fileName.lower().endswith(".xlsx"):
@@ -1018,6 +1043,7 @@ async def upload_text_template(
                 (item["id"], user["userId"], before_text, item["translatedText"] or "", reason),
             )
 
+    logger.info(f"Upload complete: fileName={fileName} updatedCount={len(parsed_rows)} userId={user['userId']}")
     return success_response({"updatedCount": len(parsed_rows)})
 
 
@@ -1165,6 +1191,7 @@ def update_translation(
     user: Dict[str, Any] = Depends(require_auth),
 ):
     """保存译文并写入变更记录。"""
+    logger.info(f"Translate: textId={textId} userId={user['userId']} isCompleted={request.isCompleted} reason={request.reason}")
     with db_cursor() as cursor:
         cursor.execute(
             'SELECT "translatedText" FROM text_main WHERE id = %s',

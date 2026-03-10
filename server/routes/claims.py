@@ -2,6 +2,7 @@
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from pydantic import BaseModel
 
 from ..db import db_cursor
@@ -18,6 +19,7 @@ class ClaimRequest(BaseModel):
 @router.post("")
 def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_auth)):
     """创建认领记录，重复认领自动忽略。"""
+    logger.info(f"Claim create: textId={request.textId} userId={user['userId']}")
     with db_cursor() as cursor:
         cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.textId,))
         if cursor.fetchone() is None:
@@ -44,12 +46,14 @@ def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_a
         else:
             claimId = claim_id
 
+    logger.info(f"Claim created: claimId={claimId} textId={request.textId} userId={user['userId']}")
     return success_response({"claimId": claimId})
 
 
 @router.delete("/{claimId}")
 def release_claim(claimId: int, user: Dict[str, Any] = Depends(require_auth)):
     """释放认领，仅允许本人释放。"""
+    logger.info(f"Claim release: claimId={claimId} userId={user['userId']}")
     with db_cursor() as cursor:
         cursor.execute(
             'SELECT id, "userId" FROM text_claims WHERE id = %s',
