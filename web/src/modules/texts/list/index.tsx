@@ -36,6 +36,7 @@ export default function TextsList() {
   const [parentPageSize, setParentPageSize] = useState(20);
   const [restoreReady, setRestoreReady] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingPackage, setDownloadingPackage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const buildListState = useCallback((): ListStateSnapshot => {
@@ -122,6 +123,10 @@ export default function TextsList() {
   }, [parentSearch]);
 
   const handleDownloadPackage = useCallback(async () => {
+    if (downloadingPackage) {
+      return;
+    }
+    setDownloadingPackage(true);
     const currentSearch = resolveSearchParams(formRef, parentSearch);
     try {
       const result = await downloadPackageFile(currentSearch);
@@ -132,8 +137,10 @@ export default function TextsList() {
       message.success("汉化包下载成功");
     } catch (error) {
       message.error(getErrorMessage(error, "汉化包下载失败"));
+    } finally {
+      setDownloadingPackage(false);
     }
-  }, [parentSearch]);
+  }, [downloadingPackage, parentSearch]);
 
   const handleUploadFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -210,6 +217,7 @@ export default function TextsList() {
               key="search-actions"
               dom={dom}
               uploading={uploading}
+              downloadingPackage={downloadingPackage}
               onDownloadFiltered={() => void handleDownloadFiltered()}
               onDownloadPackage={() => void handleDownloadPackage()}
               onDownloadTemplate={() => void handleDownloadTemplate()}

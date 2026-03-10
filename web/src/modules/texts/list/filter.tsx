@@ -209,6 +209,7 @@ export async function downloadPackageFile(search: QueryParams): Promise<Download
 type SearchActionBarProps = {
   dom: ReactNode[];
   uploading: boolean;
+  downloadingPackage: boolean;
   onDownloadFiltered: () => void;
   onDownloadPackage: () => void;
   onDownloadTemplate: () => void;
@@ -218,6 +219,7 @@ type SearchActionBarProps = {
 export function SearchActionBar({
   dom,
   uploading,
+  downloadingPackage,
   onDownloadFiltered,
   onDownloadPackage,
   onDownloadTemplate,
@@ -238,7 +240,7 @@ export function SearchActionBar({
       </Space>
       <Space wrap size={8}>
         <Button onClick={onDownloadFiltered}>导出</Button>
-        <Button onClick={onDownloadPackage}>下载汉化包</Button>
+        <Button loading={downloadingPackage} onClick={onDownloadPackage}>下载汉化包</Button>
         <Button onClick={onDownloadTemplate}>下载模板</Button>
         <Button type="primary" loading={uploading} onClick={onUpload}>
           上传译文
