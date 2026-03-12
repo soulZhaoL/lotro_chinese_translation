@@ -6,4 +6,4 @@ database:
 backup:
   mode: rename
   sourceTable: text_main
-  backupTable: text_main_bak_u46
+  backupTable: text_main_bak_u46_1

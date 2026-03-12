@@ -76,7 +76,7 @@ def get_connection():
         charset=mysql["charset"],
         cursorclass=DictCursor,
         conv=_build_mysql_converters(),
-        init_command="SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')",
+        init_command="SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES'), group_concat_max_len = 16777216",
         autocommit=False,
     )
 

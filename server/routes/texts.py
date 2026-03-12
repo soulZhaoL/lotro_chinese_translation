@@ -1,11 +1,14 @@
 # 主文本列表与详情路由。
 import os
+import threading
 from datetime import datetime
 from io import BytesIO
 from tempfile import NamedTemporaryFile
+from time import perf_counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from loguru import logger
 from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel
@@ -20,6 +23,9 @@ router = APIRouter(prefix="/texts", tags=["texts"])
 
 
 TEXT_TEMPLATE_HEADERS: Tuple[str, ...] = ("编号", "FID", "TextId", "Part", "原文", "译文", "状态")
+PACKAGE_HEADERS: Tuple[str, ...] = ("fid", "translation")
+_EXCEL_CELL_CHAR_LIMIT = 32767
+_package_download_lock = threading.Semaphore(1)
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
 STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
@@ -150,6 +156,71 @@ def _cleanup_temp_file(path: str) -> None:
         os.remove(path)
     except FileNotFoundError:
         return
+
+
+def _format_part_range(parts: List[int]) -> str:
+    """将 part 列表压缩为范围字符串，如 [1,2,3,5,6] -> '1-3,5-6'，单个 part 输出 'n-n'。"""
+    if not parts:
+        return ""
+    sorted_parts = sorted(parts)
+    ranges = []
+    start = sorted_parts[0]
+    end = sorted_parts[0]
+    for p in sorted_parts[1:]:
+        if p == end + 1:
+            end = p
+        else:
+            ranges.append(f"{start}-{end}")
+            start = p
+            end = p
+    ranges.append(f"{start}-{end}")
+    return ",".join(ranges)
+
+
+def _split_translation_into_rows(fid: str, translation: str) -> List[List[str]]:
+    """将超长 translation 按 ||| segment 边界拆分为多行写入 xlsx。
+    segment（textId::::::[text]）为最小原子单位，绝不在内部截断。
+    非末行末尾追加 '|||' 表示续行；单个 segment 超过 limit 时独占一行（完整保留）。
+    """
+    segments = translation.split("|||")
+    rows: List[List[str]] = []
+    current_parts: List[str] = []
+    current_len = 0
+    sep_len = 3  # len("|||")
+
+    for seg in segments:
+        seg_len = len(seg)
+        if not current_parts:
+            current_parts.append(seg)
+            current_len = seg_len
+        else:
+            if current_len + sep_len + seg_len > _EXCEL_CELL_CHAR_LIMIT - sep_len:
+                rows.append([fid, "|||".join(current_parts) + "|||"])
+                current_parts = [seg]
+                current_len = seg_len
+            else:
+                current_parts.append(seg)
+                current_len += sep_len + seg_len
+
+    if current_parts:
+        rows.append([fid, "|||".join(current_parts)])
+
+    return rows
+
+
+def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str]:
+    """合并同一 fid 的多个 part 为一行 Excel 数据，还原 textId::::::[text] 协议格式。
+    空译文取原文填充。返回 (fid, translation)。
+    """
+    fid = fid_rows[0]["fid"]
+    translated_segments = []
+    for row in fid_rows:
+        text_id = row["textId"]
+        source = row["sourceText"] or ""
+        translated = row["translatedText"] or source
+        translated_segments.append(f"{text_id}::::::[{translated}]")
+
+    return fid, "|||".join(translated_segments)
 
 
 def _build_download_conditions(
@@ -662,10 +733,23 @@ def download_texts(
     _: Dict[str, Any] = Depends(require_auth),
 ):
     """根据筛选条件导出文本数据（流式 + 低内存）。"""
+    request_started_at = perf_counter()
+    logger.info(
+        "download_texts start: fid={} status={} sourceKeyword={} translatedKeyword={} updatedFrom={} updatedTo={} claimer={} claimed={}",
+        fid,
+        status_filter,
+        sourceKeyword,
+        translatedKeyword,
+        updatedFrom,
+        updatedTo,
+        claimer,
+        claimed,
+    )
     config = get_config()
     text_import_export = config["text_import_export"]
     max_download_rows = text_import_export["max_download_rows"]
     download_fetch_batch_size = text_import_export["download_fetch_batch_size"]
+    download_progress_log_every_batches = text_import_export["download_progress_log_every_batches"]
     download_temp_dir = text_import_export["download_temp_dir"]
 
     if not os.path.isdir(download_temp_dir):
@@ -683,14 +767,27 @@ def download_texts(
         claimed=claimed,
     )
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    logger.info(
+        "download_texts stage=build_conditions done: conditionCount={} elapsedSec={:.3f}",
+        len(conditions),
+        perf_counter() - request_started_at,
+    )
 
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet(title="texts")
     sheet.append(list(TEXT_TEMPLATE_HEADERS))
+    logger.info(
+        "download_texts stage=init_workbook done: elapsedSec={:.3f}",
+        perf_counter() - request_started_at,
+    )
 
     export_count = 0
+    fetched_row_count = 0
+    batch_count = 0
     tmp_path: Optional[str] = None
     try:
+        db_read_started_at = perf_counter()
+        logger.info("download_texts stage=db_stream start")
         with db_stream_cursor() as cursor:
             cursor.execute(
                 f"""
@@ -712,6 +809,8 @@ def download_texts(
                 rows = cursor.fetchmany(download_fetch_batch_size)
                 if not rows:
                     break
+                batch_count += 1
+                fetched_row_count += len(rows)
                 for row in rows:
                     export_count += 1
                     if export_count > max_download_rows:
@@ -730,6 +829,23 @@ def download_texts(
                             _format_status_label(row["status"]),
                         ]
                     )
+                if batch_count == 1 or batch_count % download_progress_log_every_batches == 0:
+                    logger.info(
+                        "download_texts stage=db_stream progress: batch={} batchRows={} fetchedRows={} exportRows={} elapsedSec={:.3f}",
+                        batch_count,
+                        len(rows),
+                        fetched_row_count,
+                        export_count,
+                        perf_counter() - request_started_at,
+                    )
+        logger.info(
+            "download_texts stage=db_stream done: batches={} fetchedRows={} exportRows={} stageElapsedSec={:.3f} totalElapsedSec={:.3f}",
+            batch_count,
+            fetched_row_count,
+            export_count,
+            perf_counter() - db_read_started_at,
+            perf_counter() - request_started_at,
+        )
 
         if export_count == 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
@@ -742,8 +858,23 @@ def download_texts(
         )
         tmp_path = tmp_file.name
         tmp_file.close()
+        save_started_at = perf_counter()
+        logger.info("download_texts stage=save_xlsx start: tmpPath={}", tmp_path)
         workbook.save(tmp_path)
+        logger.info(
+            "download_texts stage=save_xlsx done: fileSizeBytes={} stageElapsedSec={:.3f} totalElapsedSec={:.3f}",
+            os.path.getsize(tmp_path),
+            perf_counter() - save_started_at,
+            perf_counter() - request_started_at,
+        )
     except Exception:
+        logger.exception(
+            "download_texts failed: fetchedRows={} exportRows={} batches={} elapsedSec={:.3f}",
+            fetched_row_count,
+            export_count,
+            batch_count,
+            perf_counter() - request_started_at,
+        )
         workbook.close()
         if tmp_path is not None:
             _cleanup_temp_file(tmp_path)
@@ -751,9 +882,230 @@ def download_texts(
     workbook.close()
 
     export_name = f"text_export_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    logger.info(
+        "download_texts done: exportName={} tmpPath={} exportRows={} fetchedRows={} batches={} totalElapsedSec={:.3f}",
+        export_name,
+        tmp_path,
+        export_count,
+        fetched_row_count,
+        batch_count,
+        perf_counter() - request_started_at,
+    )
     return FileResponse(
         path=tmp_path,
         filename=export_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=BackgroundTask(_cleanup_temp_file, tmp_path),
+    )
+
+
+@router.get("/download-package")
+def download_package(
+    fid: Optional[str] = None,
+    status_filter: Optional[int] = Query(default=None, alias="status"),
+    sourceKeyword: Optional[str] = None,
+    translatedKeyword: Optional[str] = None,
+    updatedFrom: Optional[str] = None,
+    updatedTo: Optional[str] = None,
+    claimer: Optional[str] = None,
+    claimed: Optional[bool] = None,
+    _: Dict[str, Any] = Depends(require_auth),
+):
+    """下载汉化包：按 fid + part 顺序流式读取，Python 端按 fid 增量合并。
+    translation 超过单元格字符限制时按 segment 边界自动分行，不截断任何 segment。
+    使用进程内信号量避免并发导出拖垮系统。
+    """
+    request_started_at = perf_counter()
+    logger.info(
+        "download_package start: fid={} status={} sourceKeyword={} translatedKeyword={} updatedFrom={} updatedTo={} claimer={} claimed={}",
+        fid,
+        status_filter,
+        sourceKeyword,
+        translatedKeyword,
+        updatedFrom,
+        updatedTo,
+        claimer,
+        claimed,
+    )
+    if not _package_download_lock.acquire(blocking=False):
+        logger.warning(
+            "download_package rejected: semaphore busy elapsedSec={:.3f}",
+            perf_counter() - request_started_at,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="汉化包正在生成中，请稍后再试",
+        )
+    try:
+        config = get_config()
+        text_import_export = config["text_import_export"]
+        max_download_rows = text_import_export["max_download_rows"]
+        download_fetch_batch_size = text_import_export["download_fetch_batch_size"]
+        download_progress_log_every_batches = text_import_export["download_progress_log_every_batches"]
+        download_temp_dir = text_import_export["download_temp_dir"]
+
+        if not os.path.isdir(download_temp_dir):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="导出临时目录不存在")
+
+        conditions, params = _build_download_conditions(
+            fid=fid,
+            status_filter=status_filter,
+            sourceKeyword=sourceKeyword,
+            translatedKeyword=translatedKeyword,
+            updatedFrom=updatedFrom,
+            updatedTo=updatedTo,
+            claimer=claimer,
+            claimed=claimed,
+        )
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        logger.info(
+            "download_package stage=build_conditions done: conditionCount={} elapsedSec={:.3f}",
+            len(conditions),
+            perf_counter() - request_started_at,
+        )
+
+        workbook = Workbook(write_only=True)
+        sheet = workbook.create_sheet(title="texts")
+        sheet.append(list(PACKAGE_HEADERS))
+        logger.info(
+            "download_package stage=init_workbook done: elapsedSec={:.3f}",
+            perf_counter() - request_started_at,
+        )
+
+        output_fid_count = 0
+        fetched_part_rows = 0
+        batch_count = 0
+        tmp_path: Optional[str] = None
+
+        try:
+            current_fid: Optional[str] = None
+            current_segments: List[str] = []
+
+            def flush_current_fid() -> None:
+                nonlocal output_fid_count, current_fid, current_segments
+                if current_fid is None:
+                    return
+                output_fid_count += 1
+                if output_fid_count > max_download_rows:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
+                    )
+                translation = "|||".join(current_segments)
+                if len(translation) > _EXCEL_CELL_CHAR_LIMIT:
+                    logger.warning(f"fid={current_fid} translation 超过 Excel 单元格字符上限，按 segment 边界分行")
+                    for split_row in _split_translation_into_rows(current_fid, translation):
+                        sheet.append(split_row)
+                else:
+                    sheet.append([current_fid, translation])
+                current_fid = None
+                current_segments = []
+
+            with db_stream_cursor() as cursor:
+                db_read_started_at = perf_counter()
+                logger.info("download_package stage=db_stream start")
+                cursor.execute(
+                    f"""
+                    SELECT
+                      tm.fid,
+                      tm."textId" AS "textId",
+                      tm.part,
+                      tm."sourceText" AS "sourceText",
+                      tm."translatedText" AS "translatedText"
+                    FROM text_main tm
+                    {where_clause}
+                    ORDER BY tm.fid ASC, tm.part ASC
+                    """,
+                    tuple(params),
+                )
+                while True:
+                    rows = cursor.fetchmany(download_fetch_batch_size)
+                    if not rows:
+                        break
+                    batch_count += 1
+                    fetched_part_rows += len(rows)
+                    for row in rows:
+                        row_fid = row["fid"]
+                        if current_fid is None:
+                            current_fid = row_fid
+                        elif row_fid != current_fid:
+                            flush_current_fid()
+                            current_fid = row_fid
+
+                        source_text = row["sourceText"] or ""
+                        translated_text = row["translatedText"] or source_text
+                        current_segments.append(f"{row['textId']}::::::[{translated_text}]")
+                    if batch_count == 1 or batch_count % download_progress_log_every_batches == 0:
+                        logger.info(
+                            "download_package stage=db_stream progress: batch={} batchRows={} fetchedPartRows={} flushedFidRows={} elapsedSec={:.3f}",
+                            batch_count,
+                            len(rows),
+                            fetched_part_rows,
+                            output_fid_count,
+                            perf_counter() - request_started_at,
+                        )
+
+                flush_current_fid()
+                logger.info(
+                    "download_package stage=db_stream done: batches={} fetchedPartRows={} fidRows={} stageElapsedSec={:.3f} totalElapsedSec={:.3f}",
+                    batch_count,
+                    fetched_part_rows,
+                    output_fid_count,
+                    perf_counter() - db_read_started_at,
+                    perf_counter() - request_started_at,
+                )
+
+            if output_fid_count == 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前筛选条件无可导出数据")
+
+            tmp_file = NamedTemporaryFile(
+                prefix="tmp_package_export_",
+                suffix=".xlsx",
+                dir=download_temp_dir,
+                delete=False,
+            )
+            tmp_path = tmp_file.name
+            tmp_file.close()
+            save_started_at = perf_counter()
+            logger.info("download_package stage=save_xlsx start: tmpPath={}", tmp_path)
+            workbook.save(tmp_path)
+            logger.info(
+                "download_package stage=save_xlsx done: fileSizeBytes={} stageElapsedSec={:.3f} totalElapsedSec={:.3f}",
+                os.path.getsize(tmp_path),
+                perf_counter() - save_started_at,
+                perf_counter() - request_started_at,
+            )
+        except Exception:
+            logger.exception(
+                "download_package failed: fetchedPartRows={} fidRows={} batches={} elapsedSec={:.3f}",
+                fetched_part_rows,
+                output_fid_count,
+                batch_count,
+                perf_counter() - request_started_at,
+            )
+            workbook.close()
+            if tmp_path is not None:
+                _cleanup_temp_file(tmp_path)
+            raise
+        workbook.close()
+    finally:
+        _package_download_lock.release()
+        logger.info(
+            "download_package stage=release_lock done: elapsedSec={:.3f}",
+            perf_counter() - request_started_at,
+        )
+
+    logger.info(
+        "download_package done: tmpPath={} fidRows={} fetchedPartRows={} batches={} totalElapsedSec={:.3f}",
+        tmp_path,
+        output_fid_count,
+        fetched_part_rows,
+        batch_count,
+        perf_counter() - request_started_at,
+    )
+    return FileResponse(
+        path=tmp_path,
+        filename="text_work.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         background=BackgroundTask(_cleanup_temp_file, tmp_path),
     )
@@ -767,6 +1119,7 @@ async def upload_text_template(
     user: Dict[str, Any] = Depends(require_auth),
 ):
     """按模板上传翻译结果并覆盖译文与状态。"""
+    logger.info(f"Upload start: fileName={fileName} userId={user['userId']} reason={reason}")
     if not fileName:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件缺少文件名")
     if not fileName.lower().endswith(".xlsx"):
@@ -876,6 +1229,7 @@ async def upload_text_template(
                 (item["id"], user["userId"], before_text, item["translatedText"] or "", reason),
             )
 
+    logger.info(f"Upload complete: fileName={fileName} updatedCount={len(parsed_rows)} userId={user['userId']}")
     return success_response({"updatedCount": len(parsed_rows)})
 
 
@@ -1023,6 +1377,7 @@ def update_translation(
     user: Dict[str, Any] = Depends(require_auth),
 ):
     """保存译文并写入变更记录。"""
+    logger.info(f"Translate: textId={textId} userId={user['userId']} isCompleted={request.isCompleted} reason={request.reason}")
     with db_cursor() as cursor:
         cursor.execute(
             'SELECT "translatedText" FROM text_main WHERE id = %s',

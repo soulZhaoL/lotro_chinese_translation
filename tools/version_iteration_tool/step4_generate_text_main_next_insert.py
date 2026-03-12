@@ -226,7 +226,12 @@ def _parse_segment(
     )
     if matched is None:
         return None
-    return int(matched.group("textId")), matched.group("sourceText")
+    text = matched.group("sourceText")
+    open_count = text.count("[")
+    close_count = text.count("]")
+    if open_count > close_count:
+        text = text + "]" * (open_count - close_count)
+    return int(matched.group("textId")), text
 
 
 def _write_insert_sql(handle, table_name: str, columns: List[str], rows: List[List[str]]) -> None:

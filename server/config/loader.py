@@ -150,6 +150,11 @@ def load_config() -> Dict[str, Any]:
         "text_import_export.download_fetch_batch_size",
     )
     _require_type(
+        _require_key(text_import_export, "download_progress_log_every_batches", "text_import_export."),
+        int,
+        "text_import_export.download_progress_log_every_batches",
+    )
+    _require_type(
         _require_key(text_import_export, "download_temp_dir", "text_import_export."),
         str,
         "text_import_export.download_temp_dir",
@@ -160,6 +165,8 @@ def load_config() -> Dict[str, Any]:
         raise ConfigError("配置项无效: text_import_export.max_download_rows 必须 > 0")
     if text_import_export["download_fetch_batch_size"] <= 0:
         raise ConfigError("配置项无效: text_import_export.download_fetch_batch_size 必须 > 0")
+    if text_import_export["download_progress_log_every_batches"] <= 0:
+        raise ConfigError("配置项无效: text_import_export.download_progress_log_every_batches 必须 > 0")
     if not text_import_export["download_temp_dir"].strip():
         raise ConfigError("配置项无效: text_import_export.download_temp_dir 不能为空")
 

@@ -17,6 +17,12 @@ export function clearToken() {
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
+export function redirectToLogin(): never {
+  clearToken();
+  window.location.href = "/login";
+  throw new Error("token 已过期，请重新登录");
+}
+
 export function setUserName(name: string) {
   window.localStorage.setItem(USER_NAME_KEY, name);
 }
@@ -78,12 +84,20 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
           message: typeof payload.message === "string" ? payload.message : undefined,
         });
       }
+      if (payload.code === "0401") {
+        clearToken();
+        window.location.href = "/login";
+      }
       throw new Error(payload.message || "请求失败");
     }
     return payload.data as T;
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.location.href = "/login";
+    }
     if (response.status === 503) {
       setMaintenanceState({ enabled: true });
     }

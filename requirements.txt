@@ -10,3 +10,4 @@ python-dotenv
 httpx
 openpyxl
 python-multipart
+loguru

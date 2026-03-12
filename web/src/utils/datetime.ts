@@ -14,5 +14,5 @@ export function formatDateTime(value?: string | number | Date | null): string {
   const HH = pad(date.getHours());
   const mm = pad(date.getMinutes());
   const ss = pad(date.getSeconds());
-  return `${yyyy}-${MM}-${dd} ${HH}-${mm}-${ss}`;
+  return `${yyyy}-${MM}-${dd} ${HH}:${mm}:${ss}`;
 }

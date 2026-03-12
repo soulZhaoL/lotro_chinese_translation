@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from pydantic import BaseModel
 
 from ..config import get_config
@@ -24,6 +25,7 @@ def _utc_now() -> datetime:
 @router.post("")
 def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_auth)):
     """创建锁定，若存在未过期锁则返回冲突。"""
+    logger.info(f"Lock create: textId={request.textId} userId={user['userId']}")
     config = get_config()
     lock_ttl = config["locks"]["default_ttl_seconds"]
 
@@ -61,12 +63,14 @@ def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_aut
         )
         lockId = cursor.lastrowid
 
+    logger.info(f"Lock created: lockId={lockId} textId={request.textId} userId={user['userId']} expiresAt={expiresAt}")
     return success_response({"lockId": lockId, "expiresAt": expiresAt})
 
 
 @router.delete("/{lockId}")
 def release_lock(lockId: int, user: Dict[str, Any] = Depends(require_auth)):
     """释放锁定，仅允许锁定者操作。"""
+    logger.info(f"Lock release: lockId={lockId} userId={user['userId']}")
     now = _utc_now()
     with db_cursor() as cursor:
         cursor.execute(

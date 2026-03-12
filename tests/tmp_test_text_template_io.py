@@ -83,6 +83,50 @@ def test_text_download_by_filter(seed_user):
     assert rows[1] == (row_a_id, "file_download", 12001, 1, "src_1", "dst_1", "修改")
 
 
+def test_text_download_package_merge_by_fid(seed_user):
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("fid_pkg_a", 21002, 2, "src_a_2", "dst_a_2", 2, 0),
+        )
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("fid_pkg_a", 21001, 1, "src_a_1", None, 2, 0),
+        )
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("fid_pkg_b", 22001, 1, "src_b_1", "dst_b_1", 1, 0),
+        )
+
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/texts/download-package", headers=headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    workbook = load_workbook(BytesIO(response.content), data_only=True)
+    sheet = workbook.worksheets[0]
+    rows = list(sheet.iter_rows(values_only=True))
+
+    assert rows[0] == ("fid", "translation")
+    assert rows[1] == ("fid_pkg_a", "21001::::::[src_a_1]|||21002::::::[dst_a_2]")
+    assert rows[2] == ("fid_pkg_b", "22001::::::[dst_b_1]")
+    assert len(rows) == 3
+
+
 def test_text_template_upload_success(seed_user):
     with db_cursor() as cursor:
         cursor.execute(

@@ -237,6 +237,18 @@
 
 **请求参数:** fid/status/sourceKeyword/translatedKeyword/updatedFrom/updatedTo/claimer/claimed
 
+#### [GET] /texts/download-package
+**描述:** 下载汉化包，按 fid 分组合并所有 part，还原 `textId::::::[text]` 协议格式，供游戏直接使用
+
+**请求参数:** fid/status/sourceKeyword/translatedKeyword/updatedFrom/updatedTo/claimer/claimed（可选，不传则导出全部）
+
+**响应:** xlsx 文件（固定名 `text_work.xlsx`），4列：fid / part_range / sourceText / translatedText
+
+**说明:**
+- part_range 为范围压缩格式，如 `1-3`、`1-1`、`1-2,4-5`
+- 空译文自动取原文填充
+- 流式查询 + 逐 fid flush，支持 80 万行+不 OOM
+
 #### [POST] /texts/upload?fileName=xxx.xlsx&reason=...
 **描述:** 按模板上传离线翻译结果，严格校验后批量覆盖译文与状态
 

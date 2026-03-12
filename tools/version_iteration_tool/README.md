@@ -5,11 +5,12 @@
 主流程（每次版本升级都执行）：
 
 1. `step1_backup_text_main.py`：备份主表（rename）
-2. `step3_create_text_main_next.py`：创建 `text_main_next`
-3. `step4_generate_text_main_next_insert.py`：从 `Texts.db` 生成导入 SQL
-4. `step5_compare_and_inherit.sql`：比对备份表与 next 表，分类并继承译文
-5. `step6_create_text_id_map.sql`：生成新老 ID 映射（供 `text_changes` 迁移）
-6. `step7_migrate_text_changes.sql`：按映射迁移 `text_changes` 并清理未命中记录
+2. step2_fill_source_text_hash.py: 填充hash
+3. `step3_create_text_main_next.py`：创建 `text_main_next`
+4. `step4_generate_text_main_next_insert.py`：从 `Texts.db` 生成导入 SQL
+5. `step5_compare_and_inherit.sql`：比对备份表与 next 表，分类并继承译文
+6. `step6_create_text_id_map.sql`：生成新老 ID 映射（供 `text_changes` 迁移）
+7. `step7_migrate_text_changes.sql`：按映射迁移 `text_changes` 并清理未命中记录
 
 独立工具（一次性/按需执行，不属于每次升级主流程）：
 

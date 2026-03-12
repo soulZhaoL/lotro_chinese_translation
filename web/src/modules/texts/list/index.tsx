@@ -5,14 +5,16 @@ import type { ProFormInstance } from "@ant-design/pro-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { getErrorMessage, getToken } from "../../../api";
+import { apiFetch, getErrorMessage } from "../../../api";
 import { getAppConfig } from "../../../config";
 import { parseStoredListState, saveListState } from "../storage";
 import type { ActiveConfirmState, ListStateSnapshot, QueryParams, TextItem, TextListResponse } from "../types";
 import { createParentColumns } from "./table";
 import {
   SearchActionBar,
+  type DownloadProgressSnapshot,
   downloadFilteredFile,
+  downloadPackageFile,
   downloadTemplateFile,
   hasAnyFilter,
   normalizeQueryParams,
@@ -35,6 +37,8 @@ export default function TextsList() {
   const [parentPageSize, setParentPageSize] = useState(20);
   const [restoreReady, setRestoreReady] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingPackage, setDownloadingPackage] = useState(false);
+  const [packageDownloadStageText, setPackageDownloadStageText] = useState("下载汉化包");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const buildListState = useCallback((): ListStateSnapshot => {
@@ -120,6 +124,41 @@ export default function TextsList() {
     }
   }, [parentSearch]);
 
+  const handleDownloadPackage = useCallback(async () => {
+    if (downloadingPackage) {
+      return;
+    }
+    setDownloadingPackage(true);
+    setPackageDownloadStageText("汉化包生成中...");
+    const currentSearch = resolveSearchParams(formRef, parentSearch);
+    try {
+      const result = await downloadPackageFile(currentSearch, {
+        onProgress: (progress: DownloadProgressSnapshot) => {
+          if (progress.stage === "preparing") {
+            setPackageDownloadStageText("汉化包生成中...");
+            return;
+          }
+          if (progress.percent !== null) {
+            setPackageDownloadStageText(`汉化包传输中 ${progress.percent}%`);
+            return;
+          }
+          const receivedMb = (progress.loadedBytes / (1024 * 1024)).toFixed(1);
+          setPackageDownloadStageText(`汉化包传输中 ${receivedMb}MB`);
+        },
+      });
+      if (result === "mock_unsupported") {
+        message.warning("Mock 模式不支持汉化包下载");
+        return;
+      }
+      message.success("汉化包下载成功");
+    } catch (error) {
+      message.error(getErrorMessage(error, "汉化包下载失败"));
+    } finally {
+      setDownloadingPackage(false);
+      setPackageDownloadStageText("下载汉化包");
+    }
+  }, [downloadingPackage, parentSearch]);
+
   const handleUploadFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     event.target.value = "";
@@ -138,39 +177,20 @@ export default function TextsList() {
         message.warning("Mock 模式不支持模板上传");
         return;
       }
-      const apiBase = config.apiBaseUrl;
-      if (!apiBase) {
-        throw new Error("缺少 apiBaseUrl");
-      }
-      const token = getToken();
-      if (!token) {
-        throw new Error("未登录或登录已失效");
-      }
 
       const query = new URLSearchParams();
       query.set("fileName", selectedFile.name);
       query.set("reason", "模板批量上传");
 
-      const response = await fetch(`${apiBase}/texts/upload?${query.toString()}`, {
+      const result = await apiFetch<{ updatedCount?: number }>(`/texts/upload?${query.toString()}`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         },
         body: selectedFile,
       });
-      const payload = (await response.json()) as {
-        success?: boolean;
-        code?: string;
-        message?: string;
-        data?: { updatedCount?: number };
-      };
 
-      if (!response.ok || !payload.success || payload.code !== "0000") {
-        throw new Error(payload.message || "上传失败");
-      }
-
-      message.success(`上传成功，更新 ${payload.data?.updatedCount || 0} 条`);
+      message.success(`上传成功，更新 ${result.updatedCount || 0} 条`);
       actionRef.current?.reload();
     } catch (error) {
       message.error(getErrorMessage(error, "上传失败"));
@@ -215,7 +235,10 @@ export default function TextsList() {
               key="search-actions"
               dom={dom}
               uploading={uploading}
+              downloadingPackage={downloadingPackage}
+              packageDownloadText={packageDownloadStageText}
               onDownloadFiltered={() => void handleDownloadFiltered()}
+              onDownloadPackage={() => void handleDownloadPackage()}
               onDownloadTemplate={() => void handleDownloadTemplate()}
               onUpload={() => fileInputRef.current?.click()}
             />,
@@ -260,30 +283,7 @@ export default function TextsList() {
             if (normalized.claimer) query.set("claimer", normalized.claimer);
             if (normalized.claimed !== undefined) query.set("claimed", String(normalized.claimed));
 
-            const config = getAppConfig();
-            const apiBase = config.useMock ? "/api" : config.apiBaseUrl;
-            if (!apiBase) {
-              throw new Error("缺少 apiBaseUrl");
-            }
-            const token = getToken();
-            const headers = new Headers();
-            if (token) {
-              headers.set("Authorization", `Bearer ${token}`);
-            }
-
-            const response = await fetch(`${apiBase}/texts?${query.toString()}`, {
-              method: "GET",
-              headers,
-            });
-            const payload = (await response.json()) as {
-              code?: string;
-              message?: string;
-              data?: TextListResponse;
-            };
-            if (!response.ok || payload.code !== "0000" || !payload.data) {
-              throw new Error(payload.message || "加载列表失败");
-            }
-            const data = payload.data;
+            const data = await apiFetch<TextListResponse>(`/texts?${query.toString()}`);
 
             return {
               data: data.items,

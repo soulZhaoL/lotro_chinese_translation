@@ -6,19 +6,6 @@ export type AppConfig = {
 
 let cachedConfig: AppConfig | null = null;
 
-function parseBooleanEnv(rawValue: unknown, key: string): boolean {
-  if (typeof rawValue !== "string") {
-    throw new Error(`前端配置缺少 ${key}`);
-  }
-  if (rawValue === "true") {
-    return true;
-  }
-  if (rawValue === "false") {
-    return false;
-  }
-  throw new Error(`前端配置无效: ${key} 仅支持 true/false`);
-}
-
 function parseApiBaseUrl(rawValue: unknown): string {
   if (typeof rawValue !== "string") {
     throw new Error("前端配置缺少 VITE_API_BASE_URL");
@@ -31,11 +18,11 @@ function parseApiBaseUrl(rawValue: unknown): string {
 }
 
 function resolveConfig(): AppConfig {
-  const useMock = parseBooleanEnv(import.meta.env.VITE_USE_MOCK, "VITE_USE_MOCK");
+  const useMock = import.meta.env.MODE === "mock";
   const isDev = import.meta.env.DEV;
 
   if (useMock && !isDev) {
-    throw new Error("前端配置无效: 生产构建禁止启用 Mock（VITE_USE_MOCK 必须为 false）");
+    throw new Error("前端配置无效: 生产构建禁止启用 Mock（--mode mock 仅限开发环境）");
   }
 
   const apiBaseUrl = useMock ? "" : parseApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
