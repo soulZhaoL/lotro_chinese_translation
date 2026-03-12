@@ -8,13 +8,13 @@ export default [
     url: /\/api\/changes/,
     method: "get",
     response: ({ query }) => {
-      const textId = query?.textId ? Number(query.textId) : undefined;
+      const id = query?.id ? Number(query.id) : undefined;
       return {
         success: true,
         statusCode: 200,
         code: "0000",
         message: "操作成功",
-        data: { items: generateChanges(textId) },
+        data: { items: generateChanges(id) },
       };
     },
   },

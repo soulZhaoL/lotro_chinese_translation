@@ -329,7 +329,7 @@ def _build_patterns(id_pattern: str) -> Tuple[re.Pattern[str], re.Pattern[str], 
 def _parse_segment(
     segment: str,
     patterns: Tuple[re.Pattern[str], re.Pattern[str], re.Pattern[str]],
-) -> Optional[Tuple[int, str]]:
+) -> Optional[Tuple[str, str]]:
     pattern_colon6, pattern_triple_colon_num, pattern_triple_colon_range = patterns
     matched = (
         pattern_colon6.fullmatch(segment)
@@ -345,7 +345,7 @@ def _parse_segment(
     close_count = text.count("]")
     if open_count > close_count:
         text = text + "]" * (open_count - close_count)
-    return int(matched.group("textId")), text
+    return matched.group("textId"), text
 
 
 def _is_blank_row(fid: str, source_text: str, translated_text: str) -> bool:
@@ -358,7 +358,7 @@ def _parse_cell_segments(
     patterns: Tuple[re.Pattern[str], re.Pattern[str], re.Pattern[str]],
     row_index: int,
     column_name: str,
-) -> List[Tuple[int, str]]:
+) -> List[Tuple[str, str]]:
     if raw_text.strip() == "":
         raise RowParseError(f"Row {row_index} {column_name} is empty")
     pieces = raw_text.split(split_delimiter)

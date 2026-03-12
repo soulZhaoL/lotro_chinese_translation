@@ -59,7 +59,7 @@ export default [
     method: "get",
     response: ({ query }) => {
       const fid = query?.fid || "";
-      const textId = Number(query?.textId);
+      const textId = query?.textId || "";
       const text = generateTextDetailByTextId(fid, textId);
       return {
         success: true,

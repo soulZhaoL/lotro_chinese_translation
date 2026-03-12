@@ -225,7 +225,7 @@ def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str]:
 
 def _build_download_conditions(
     fid: Optional[str],
-    textId: Optional[int],
+    textId: Optional[str],
     status_filter: Optional[int],
     sourceKeyword: Optional[str],
     translatedKeyword: Optional[str],
@@ -241,8 +241,8 @@ def _build_download_conditions(
         conditions.append("tm.fid = %s")
         params.append(fid)
     if textId is not None:
-        if textId <= 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="textId 必须 > 0")
+        if textId == "":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="textId 不能为空")
         conditions.append('tm."textId" = %s')
         params.append(textId)
     if status_filter is not None:
@@ -287,7 +287,7 @@ def _build_download_conditions(
 @router.get("")
 def list_texts(
     fid: Optional[str] = None,
-    textId: Optional[int] = Query(default=None, alias="textId"),
+    textId: Optional[str] = Query(default=None, alias="textId"),
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
     translatedKeyword: Optional[str] = None,
@@ -577,7 +577,7 @@ def list_parent_texts(
 @router.get("/children")
 def list_child_texts(
     fid: str,
-    textId: Optional[int] = Query(default=None, alias="textId"),
+    textId: Optional[str] = Query(default=None, alias="textId"),
     sourceKeyword: Optional[str] = None,
     translatedKeyword: Optional[str] = None,
     page: int = 1,
@@ -722,7 +722,7 @@ def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
 @router.get("/download")
 def download_texts(
     fid: Optional[str] = None,
-    textId: Optional[int] = Query(default=None, alias="textId"),
+    textId: Optional[str] = Query(default=None, alias="textId"),
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
     translatedKeyword: Optional[str] = None,
@@ -1154,10 +1154,10 @@ async def upload_text_template(
             )
 
         row_id = _parse_required_int(cells[0], "编号", row_index)
-        text_id = _parse_required_int(cells[2], "TextId", row_index)
+        text_id = _parse_required_str(cells[2], "TextId", row_index)
         part = _parse_required_int(cells[3], "Part", row_index)
-        if row_id <= 0 or text_id <= 0 or part <= 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"第 {row_index} 行编号/TextId/Part 必须 > 0")
+        if row_id <= 0 or part <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"第 {row_index} 行编号/Part 必须 > 0")
 
         parsed_rows.append(
             {
@@ -1236,7 +1236,7 @@ async def upload_text_template(
 @router.get("/by-textid")
 def get_text_by_textid(
     fid: str,
-    textId: int = Query(..., alias="textId"),
+    textId: str = Query(..., alias="textId"),
     _: Dict[str, Any] = Depends(require_auth),
 ):
     """根据 fid + textId 获取主文本详情。"""

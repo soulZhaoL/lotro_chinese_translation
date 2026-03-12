@@ -10,7 +10,7 @@ import type { ListStateSnapshot, TextDetailByTextIdResponse } from "../types";
 export default function TextEdit() {
   const params = useParams();
   const fid = params.fid || "";
-  const textId = Number(params.textId);
+  const textId = params.textId || "";
   const [detail, setDetail] = useState<TextDetailByTextIdResponse | null>(null);
   const [translated, setTranslated] = useState("");
   const [reason, setReason] = useState("");
@@ -28,7 +28,7 @@ export default function TextEdit() {
     const load = async () => {
       try {
         const response = await apiFetch<TextDetailByTextIdResponse>(
-          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${encodeURIComponent(textId)}`
         );
         setDetail(response);
         setTranslated(response.text.translatedText || "");
@@ -37,7 +37,7 @@ export default function TextEdit() {
         message.error(getErrorMessage(error, "加载失败"));
       }
     };
-    if (fid && Number.isFinite(textId)) {
+    if (fid && textId) {
       void load();
     }
   }, [fid, textId]);

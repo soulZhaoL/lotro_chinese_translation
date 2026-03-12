@@ -59,7 +59,7 @@ CREATE TABLE role_permissions (
 CREATE TABLE text_main (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   fid VARCHAR(64) NOT NULL COMMENT '文件标识',
-  `textId` BIGINT NOT NULL COMMENT '文本标识',
+  `textId` VARCHAR(255) NOT NULL COMMENT '文本标识',
   part INT NOT NULL COMMENT '分段顺序',
   `sourceText` TEXT COMMENT '原文',
   `sourceTextHash` VARCHAR(64) COMMENT '原文哈希（SHA256）',

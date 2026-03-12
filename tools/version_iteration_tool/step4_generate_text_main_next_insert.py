@@ -217,7 +217,7 @@ def _build_patterns(id_pattern: str) -> Tuple[re.Pattern[str], re.Pattern[str], 
 def _parse_segment(
     segment: str,
     patterns: Tuple[re.Pattern[str], re.Pattern[str], re.Pattern[str]],
-) -> Optional[Tuple[int, str]]:
+) -> Optional[Tuple[str, str]]:
     pattern_colon6, pattern_triple_colon_num, pattern_triple_colon_range = patterns
     matched = (
         pattern_colon6.fullmatch(segment)
@@ -231,7 +231,7 @@ def _parse_segment(
     close_count = text.count("]")
     if open_count > close_count:
         text = text + "]" * (open_count - close_count)
-    return int(matched.group("textId")), text
+    return matched.group("textId"), text
 
 
 def _write_insert_sql(handle, table_name: str, columns: List[str], rows: List[List[str]]) -> None:

@@ -146,7 +146,7 @@ function TextRowActions({
             setClaimingId(record.id);
             await apiFetch("/claims", {
               method: "POST",
-              body: JSON.stringify({ textId: record.id }),
+              body: JSON.stringify({ id: record.id }),
             });
             message.success("认领成功");
             onChanged();

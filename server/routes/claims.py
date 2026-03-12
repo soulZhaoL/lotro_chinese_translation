@@ -13,15 +13,15 @@ router = APIRouter(prefix="/claims", tags=["claims"])
 
 
 class ClaimRequest(BaseModel):
-    textId: int
+    id: int
 
 
 @router.post("")
 def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_auth)):
     """创建认领记录，重复认领自动忽略。"""
-    logger.info(f"Claim create: textId={request.textId} userId={user['userId']}")
+    logger.info(f"Claim create: id={request.id} userId={user['userId']}")
     with db_cursor() as cursor:
-        cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.textId,))
+        cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")
 
@@ -31,13 +31,13 @@ def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_a
             VALUES (%s, %s)
             ON DUPLICATE KEY UPDATE id = id
             """,
-            (request.textId, user["userId"]),
+            (request.id, user["userId"]),
         )
         claim_id = cursor.lastrowid
         if claim_id == 0:
             cursor.execute(
                 'SELECT id FROM text_claims WHERE "textId" = %s AND "userId" = %s',
-                (request.textId, user["userId"]),
+                (request.id, user["userId"]),
             )
             existing = cursor.fetchone()
             if existing is None:
@@ -46,7 +46,7 @@ def create_claim(request: ClaimRequest, user: Dict[str, Any] = Depends(require_a
         else:
             claimId = claim_id
 
-    logger.info(f"Claim created: claimId={claimId} textId={request.textId} userId={user['userId']}")
+    logger.info(f"Claim created: claimId={claimId} id={request.id} userId={user['userId']}")
     return success_response({"claimId": claimId})
 
 

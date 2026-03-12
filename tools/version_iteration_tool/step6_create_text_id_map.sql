@@ -62,7 +62,7 @@ BEGIN
         '`oldId` BIGINT NOT NULL, ',
         '`newId` BIGINT NOT NULL, ',
         'fid VARCHAR(64) NOT NULL, ',
-        '`textId` BIGINT NOT NULL, ',
+        '`textId` VARCHAR(255) NOT NULL, ',
         'part INT NOT NULL, ',
         '`sourceTextHash` VARCHAR(64) NOT NULL, ',
         '`crtTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, ',

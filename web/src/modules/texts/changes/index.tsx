@@ -11,7 +11,7 @@ import type { ChangeItem, ChangesResponse, TextIdOnlyResponse } from "../types";
 export default function TextChanges() {
   const params = useParams();
   const fid = params.fid || "";
-  const textId = Number(params.textId);
+  const textId = params.textId || "";
   const [data, setData] = useState<ChangeItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -20,9 +20,9 @@ export default function TextChanges() {
       setLoading(true);
       try {
         const detail = await apiFetch<TextIdOnlyResponse>(
-          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${textId}`
+          `/texts/by-textid?fid=${encodeURIComponent(fid)}&textId=${encodeURIComponent(textId)}`
         );
-        const response = await apiFetch<ChangesResponse>(`/changes?textId=${detail.text.id}`);
+        const response = await apiFetch<ChangesResponse>(`/changes?id=${detail.text.id}`);
         setData(response.items);
       } catch (error) {
         message.error(getErrorMessage(error, "加载失败"));
@@ -30,7 +30,7 @@ export default function TextChanges() {
         setLoading(false);
       }
     };
-    if (fid && Number.isFinite(textId)) {
+    if (fid && textId) {
       void load();
     }
   }, [fid, textId]);

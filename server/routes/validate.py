@@ -13,7 +13,7 @@ router = APIRouter(prefix="/validate", tags=["validation"])
 
 
 class ValidateRequest(BaseModel):
-    textId: int
+    id: int
     translatedText: str
 
 
@@ -33,7 +33,7 @@ def _extract_percent_tokens(text: str) -> List[str]:
 def validate_text(request: ValidateRequest, _: Dict[str, Any] = Depends(require_auth)):
     """校验译文格式并返回错误列表。"""
     with db_cursor() as cursor:
-        cursor.execute('SELECT "sourceText" FROM text_main WHERE id = %s', (request.textId,))
+        cursor.execute('SELECT "sourceText" FROM text_main WHERE id = %s', (request.id,))
         row = cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")

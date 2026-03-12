@@ -30,7 +30,7 @@ export default function Translate() {
         setLocking(true);
         const response = await apiFetch<{ lockId: number }>("/locks", {
           method: "POST",
-          body: JSON.stringify({ textId: textId }),
+          body: JSON.stringify({ id: textId }),
         });
         setLockId(response.lockId);
       } catch (error) {

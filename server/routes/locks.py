@@ -15,7 +15,7 @@ router = APIRouter(prefix="/locks", tags=["locks"])
 
 
 class LockRequest(BaseModel):
-    textId: int
+    id: int
 
 
 def _utc_now() -> datetime:
@@ -25,12 +25,12 @@ def _utc_now() -> datetime:
 @router.post("")
 def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_auth)):
     """创建锁定，若存在未过期锁则返回冲突。"""
-    logger.info(f"Lock create: textId={request.textId} userId={user['userId']}")
+    logger.info(f"Lock create: id={request.id} userId={user['userId']}")
     config = get_config()
     lock_ttl = config["locks"]["default_ttl_seconds"]
 
     with db_cursor() as cursor:
-        cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.textId,))
+        cursor.execute("SELECT id FROM text_main WHERE id = %s", (request.id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文本不存在")
 
@@ -40,7 +40,7 @@ def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_aut
             FROM text_locks
             WHERE "textId" = %s AND "releasedAt" IS NULL
             """,
-            (request.textId,),
+            (request.id,),
         )
         active = cursor.fetchone()
         now = _utc_now()
@@ -59,11 +59,11 @@ def create_lock(request: LockRequest, user: Dict[str, Any] = Depends(require_aut
             INSERT INTO text_locks ("textId", "userId", "lockedAt", "expiresAt", "releasedAt")
             VALUES (%s, %s, %s, %s, NULL)
             """,
-            (request.textId, user["userId"], now, expiresAt),
+            (request.id, user["userId"], now, expiresAt),
         )
         lockId = cursor.lastrowid
 
-    logger.info(f"Lock created: lockId={lockId} textId={request.textId} userId={user['userId']} expiresAt={expiresAt}")
+    logger.info(f"Lock created: lockId={lockId} id={request.id} userId={user['userId']} expiresAt={expiresAt}")
     return success_response({"lockId": lockId, "expiresAt": expiresAt})
 
 

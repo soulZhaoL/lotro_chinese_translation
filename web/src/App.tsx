@@ -42,9 +42,9 @@ function AppLayout({ onLogout }: AppLayoutProps) {
   const navigate = useNavigate();
   const userName = getUserName();
   const pathname = location.pathname;
-  const isEditPage = /^\/texts\/[^/]+\/\d+\/edit$/.test(pathname);
-  const isChangesPage = /^\/texts\/[^/]+\/\d+\/changes$/.test(pathname);
-  const isDetailPage = /^\/texts\/[^/]+\/\d+$/.test(pathname);
+  const isEditPage = /^\/texts\/[^/]+\/[^/]+\/edit$/.test(pathname);
+  const isChangesPage = /^\/texts\/[^/]+\/[^/]+\/changes$/.test(pathname);
+  const isDetailPage = /^\/texts\/[^/]+\/[^/]+$/.test(pathname);
 
   return (
     <ProLayout

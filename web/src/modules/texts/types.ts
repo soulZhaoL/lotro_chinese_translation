@@ -17,7 +17,7 @@ export interface TextLock {
 export interface TextItem {
   id: number;
   fid: string;
-  textId: number;
+  textId: string;
   part: number;
   sourceText: string | null;
   translatedText: string | null;
@@ -62,7 +62,7 @@ export interface TextDetailByTextIdResponse {
   text: {
     id: number;
     fid: string;
-    textId: number;
+    textId: string;
     part: number;
     sourceText: string | null;
     translatedText: string | null;
