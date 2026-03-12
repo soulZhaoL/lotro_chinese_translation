@@ -1,0 +1,30 @@
+# textId 修复映射生成工具配置文件（SQLite 来源）
+#
+# 作用：从 SQLite 原始数据推导出 (fid, 错误textId) → 正确textId 的映射，
+#       生成 UPDATE SQL，无需连接数据库。
+#
+# 用法:
+#   python tools/fix_textid/generate_fix_sql_from_sqlite.py --config tools/fix_textid/generate_fix_sql_from_sqlite.yaml
+
+input:
+  # SQLite 原始数据文件（与 step4 使用同一个文件）
+  sqlitePath: work_text/Texts_47.db
+  sourceTable: patch_data
+  fidColumn: fid
+  textDataColumn: text_data
+
+parsing:
+  splitDelimiter: "|||"
+  # 与 step4 保持完全一致
+  idPattern: '\d{2,10}'
+
+output:
+  # 对照表 CSV（fid, old_textId, new_textId）
+  csvPath: tmp/textid_fix_map_sqlite_47.csv
+  # 可直接在数据库执行的 UPDATE SQL
+  sqlPath: tmp/textid_fix_map_sqlite_47.sql
+  overwrite: true
+
+db:
+  # UPDATE 目标表
+  table: text_main

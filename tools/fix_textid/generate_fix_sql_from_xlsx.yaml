@@ -1,0 +1,37 @@
+# textId 修复映射生成工具配置文件（xlsx 来源）
+#
+# 作用：从 xlsx 原始数据推导出 (fid, 错误textId) → 正确textId 的映射，
+#       生成 UPDATE SQL，无需连接数据库。
+#
+# 用法:
+#   python tools/fix_textid/generate_fix_sql_from_xlsx.py --config tools/fix_textid/generate_fix_sql_from_xlsx.yaml
+
+base_dir: "__PROJECT_ROOT__"
+
+input:
+  # xlsx 原始数据文件（与 xlsx_to_insert_segmented 使用同一个文件）
+  # path: "work_text/U46.01.xlsx"
+  path: "work_text/U46.1.xlsx"
+  sheet: "Sheet1"
+  row_start: 2
+  row_end: "max"
+  columns:
+    fid: "A"
+    splitPart: "B"
+    sourceText: "C"   # 只需要 source 列，无需 translatedText
+
+parsing:
+  splitDelimiter: "|||"
+  # 与 xlsx_to_insert_segmented 保持完全一致
+  idPattern: "\\d{2,10}"
+
+output:
+  # 对照表 CSV（fid, old_textId, new_textId）
+  csvPath: tmp/textid_fix_map_xlsx_46_1.csv
+  # 可直接在数据库执行的 UPDATE SQL
+  sqlPath: tmp/textid_fix_map_xlsx_46_1.sql
+  overwrite: true
+
+db:
+  # UPDATE 目标表
+  table: text_main
