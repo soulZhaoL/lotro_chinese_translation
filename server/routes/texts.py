@@ -1040,7 +1040,11 @@ def download_package(
 
                         source_text = row["sourceText"] or ""
                         translated_text = row["translatedText"] or source_text
-                        current_segments.append(f"{row['textId']}::::::[{translated_text}]")
+                        text_id = str(row["textId"])
+                        if ":::" in text_id:
+                            current_segments.append(f"{text_id}:::[{translated_text}]")
+                        else:
+                            current_segments.append(f"{text_id}::::::[{translated_text}]")
                     if batch_count == 1 or batch_count % download_progress_log_every_batches == 0:
                         logger.info(
                             "download_package stage=db_stream progress: batch={} batchRows={} fetchedPartRows={} flushedFidRows={} elapsedSec={:.3f}",
