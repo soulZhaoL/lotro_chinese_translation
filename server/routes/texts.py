@@ -154,6 +154,7 @@ def _cleanup_temp_file(path: str) -> None:
 
 def _build_download_conditions(
     fid: Optional[str],
+    textId: Optional[int],
     status_filter: Optional[int],
     sourceKeyword: Optional[str],
     translatedKeyword: Optional[str],
@@ -168,6 +169,11 @@ def _build_download_conditions(
     if fid is not None:
         conditions.append("tm.fid = %s")
         params.append(fid)
+    if textId is not None:
+        if textId <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="textId 必须 > 0")
+        conditions.append('tm."textId" = %s')
+        params.append(textId)
     if status_filter is not None:
         if status_filter not in (1, 2, 3):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status 必须为 1/2/3")
@@ -210,6 +216,7 @@ def _build_download_conditions(
 @router.get("")
 def list_texts(
     fid: Optional[str] = None,
+    textId: Optional[int] = Query(default=None, alias="textId"),
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
     translatedKeyword: Optional[str] = None,
@@ -234,6 +241,7 @@ def list_texts(
     offset = _apply_pagination(page, effective_page_size)
     conditions, params = _build_download_conditions(
         fid=fid,
+        textId=textId,
         status_filter=status_filter,
         sourceKeyword=sourceKeyword,
         translatedKeyword=translatedKeyword,
@@ -643,6 +651,7 @@ def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
 @router.get("/download")
 def download_texts(
     fid: Optional[str] = None,
+    textId: Optional[int] = Query(default=None, alias="textId"),
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
     translatedKeyword: Optional[str] = None,
@@ -664,6 +673,7 @@ def download_texts(
 
     conditions, params = _build_download_conditions(
         fid=fid,
+        textId=textId,
         status_filter=status_filter,
         sourceKeyword=sourceKeyword,
         translatedKeyword=translatedKeyword,

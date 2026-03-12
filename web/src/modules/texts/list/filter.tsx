@@ -64,6 +64,7 @@ export function normalizeQueryParams(raw: Partial<QueryParams> & { uptTime?: [st
   const range = normalizeRange(raw.uptTime);
   return {
     fid: normalizeString(raw.fid),
+    textId: normalizeString(raw.textId),
     status: normalizeStatus(raw.status),
     sourceKeyword: normalizeString(raw.sourceKeyword),
     translatedKeyword: normalizeString(raw.translatedKeyword),
@@ -82,6 +83,9 @@ export function buildDownloadQuery(params: QueryParams): URLSearchParams {
   const query = new URLSearchParams();
   if (params.fid) {
     query.set("fid", params.fid);
+  }
+  if (params.textId) {
+    query.set("textId", params.textId);
   }
   if (params.status !== undefined) {
     query.set("status", String(params.status));

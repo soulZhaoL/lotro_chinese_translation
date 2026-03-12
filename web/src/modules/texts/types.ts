@@ -40,6 +40,7 @@ export interface TextListResponse {
 
 export interface QueryParams {
   fid?: string;
+  textId?: string;
   status?: number | string;
   sourceKeyword?: string;
   translatedKeyword?: string;

@@ -349,6 +349,7 @@ export function createParentColumns({
       ),
     },
     { title: "FID", dataIndex: "fid", hideInTable: true },
+    { title: "TextId", dataIndex: "textId", hideInTable: true },
     {
       title: "状态",
       dataIndex: "status",

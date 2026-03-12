@@ -1,6 +1,6 @@
 import type { ActionType } from "@ant-design/pro-components";
 import { ProTable } from "@ant-design/pro-components";
-import { Button, message } from "antd";
+import { message } from "antd";
 import type { ProFormInstance } from "@ant-design/pro-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -209,6 +209,7 @@ export default function TextsList() {
         toolBarRender={false}
         search={{
           labelWidth: "auto",
+          span: 6,
           optionRender: (_, __, dom) => [
             <SearchActionBar
               key="search-actions"
@@ -250,6 +251,7 @@ export default function TextsList() {
             query.set("page", String(params.current || 1));
             query.set("pageSize", String(params.pageSize || parentPageSize));
             if (normalized.fid) query.set("fid", normalized.fid);
+            if (normalized.textId) query.set("textId", normalized.textId);
             if (normalized.status !== undefined) query.set("status", String(normalized.status));
             if (normalized.sourceKeyword) query.set("sourceKeyword", normalized.sourceKeyword);
             if (normalized.translatedKeyword) query.set("translatedKeyword", normalized.translatedKeyword);
