@@ -4,7 +4,7 @@ database:
   dsnEnv: LOTRO_DATABASE_DSN
 
 createNext:
-  sourceTable: text_main_bak_u46_1
+  sourceTable: text_main_bak_u47_0
   nextTable: text_main_next
   autoIncrement:
     idColumn: id
