@@ -65,7 +65,7 @@
     {
       "id": 1,
       "fid": "file_a",
-      "textId": 10001,
+      "textId": "126853056",
       "part": 1,
       "status": 1,
       "claimId": 10,
@@ -83,38 +83,44 @@
 #### [GET] /texts/children
 **描述:** 获取指定 fid 的子列表（默认排除 part=1）
 
-**请求参数:** fid（必填）/textId（可选）/sourceKeyword（可选）/translatedKeyword（可选）/page/pageSize
+**请求参数:** fid（必填）/textId（可选，字符串精确匹配）/sourceKeyword（可选）/translatedKeyword（可选）/page/pageSize
 
 **响应:** 同父列表结构，按 part 升序
 
 #### [GET] /texts/by-textid
-**描述:** fid + textId 精确查询
+**描述:** fid + textId 精确查询（textId 为字符串业务键）
 
-**请求参数:** fid/textId
+**请求参数:** fid/textId（均为字符串）
 
 **响应:**
 ```json
 {
-  "text": { "id": 1, "fid": "file_a", "textId": 10001, "part": 1 },
+  "text": { "id": 1, "fid": "file_a", "textId": "126853056", "part": 1 },
   "claims": [],
   "locks": []
 }
 ```
 
 #### [GET] /texts/{textId}
-**描述:** 获取主文本详情（内部 ID）
+**描述:** 获取主文本详情（内部 ID，即 text_main.id，非业务 textId）
 
 **响应:**
 ```json
 {
-  "text": { "id": 1, "fid": "file_a", "textId": 10001, "part": 1 },
+  "text": { "id": 1, "fid": "file_a", "textId": "126853056", "part": 1 },
   "claims": [],
   "locks": []
 }
 ```
 
 #### [POST] /claims
-**描述:** 认领任务（text_main.id）
+**描述:** 认领任务
+
+**请求体:**
+```json
+{ "id": 1 }
+```
+> 注意：请求体字段为 `id`（text_main.id 内部主键），非业务 textId
 
 **响应:**
 ```json
@@ -131,6 +137,12 @@
 
 #### [POST] /locks
 **描述:** 进入翻译页锁定文本
+
+**请求体:**
+```json
+{ "id": 1 }
+```
+> 注意：请求体字段为 `id`（text_main.id 内部主键），非业务 textId
 
 **响应:**
 ```json
@@ -149,13 +161,14 @@
 
 ### 变更历史
 
-#### [GET] /changes?textId=...
-**描述:** 获取文本变更历史
+#### [GET] /changes?id=...
+**描述:** 获取文本变更历史（按 text_main.id 查询，即内部主键）
 
 **响应:**
 ```json
 { "items": [{ "id": 1, "textId": 1, "beforeText": "...", "afterText": "..." }] }
 ```
+> 注意：查询参数名为 `id`（text_main.id 内部主键）；响应中 `textId` 字段同样是内部主键
 
 ---
 

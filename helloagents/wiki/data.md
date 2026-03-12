@@ -51,12 +51,12 @@
 ### text_main
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | bigint | 主键 |
+| id | bigint | 主键（内部自增 ID，供外键关联使用） |
 | fid | varchar | 文件标识 |
-| textId | bigint | 文本标识 |
-| part | int | 分段顺序 |
+| textId | varchar(255) | 业务文本标识（字符串，可为复合格式如 `126853056:::337429-296068`） |
+| part | int | 同一 fid 下的分段顺序（从 1 开始） |
 | sourceText | text | 原文（允许为空） |
-| sourceTextHash | varchar | 原文哈希（SHA256） |
+| sourceTextHash | varchar | 原文哈希（SHA256，用于版本迭代比对） |
 | translatedText | text | 译文 |
 | status | smallint | 状态（1=新增/2=修改/3=已完成） |
 | isClaimed | boolean | 是否已认领（未认领/已认领） |
@@ -64,17 +64,21 @@
 | uptTime | timestamp | 最近更新时间 |
 | crtTime | timestamp | 创建时间 |
 
+> **注意：`id` vs `textId` 语义区分**
+> - `id`（bigint）：内部自增主键，`text_claims.textId`、`text_locks.textId`、`text_changes.textId` 均通过此字段关联，API 参数中统一用 `id` 命名
+> - `textId`（varchar）：游戏原始业务键，来自协议段解析，支持三种格式：纯数字（`126853056`）、`num:::N:::` 形式、`num:::N-M:::` 复合形式；前端列表筛选和路由均使用此字段
+
 #### 索引与性能
-- 查询索引: fid, (fid, part), textId, (fid, textId)
-- 部分索引: (fid) WHERE part=1
-- 筛选索引: status, uptTime
-- 关键词检索: sourceText/translatedText 使用 LIKE（按需可升级为 FULLTEXT）
+- 唯一约束: `(fid, textId)` — 业务主键，保证每个 fid 下 textId 唯一
+- 查询索引: `fid`, `(fid, part)`, `textId`, `(fid, textId)`
+- 筛选索引: `status`, `uptTime`
+- 关键词检索: `sourceText`/`translatedText` 使用 LIKE（按需可升级为 FULLTEXT）
 
 ### text_claims
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | bigint | 主键 |
-| textId | bigint | 关联 text_main |
+| textId | bigint | 关联 text_main.id（内部主键，非业务 textId） |
 | userId | bigint | 认领人 |
 | claimedAt | timestamp | 认领时间 |
 
@@ -82,7 +86,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | bigint | 主键 |
-| textId | bigint | 关联 text_main |
+| textId | bigint | 关联 text_main.id（内部主键，非业务 textId） |
 | userId | bigint | 锁定人 |
 | lockedAt | timestamp | 锁定时间 |
 | expiresAt | timestamp | 过期时间 |
@@ -92,7 +96,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | bigint | 主键 |
-| textId | bigint | 关联 text_main |
+| textId | bigint | 关联 text_main.id（内部主键，非业务 textId） |
 | userId | bigint | 操作者 |
 | beforeText | text | 变更前文本 |
 | afterText | text | 变更后文本 |

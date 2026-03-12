@@ -1,0 +1,27 @@
+# 修复映射生成工具配置文件
+# 根据实际环境修改以下路径和配置项
+
+input:
+  # SQLite 源文件路径（相对路径从项目根目录起）
+  sqlitePath: work_text/Texts_47.db
+  sourceTable: patch_data
+  fidColumn: fid
+  textDataColumn: text_data
+
+parsing:
+  splitDelimiter: "|||"
+  # 与 step4 保持一致的 id 模式
+  idPattern: '\d{2,10}'
+
+output:
+  # 输出 CSV（记录所有错误→正确的 textId 对照）
+  csvPath: tmp/textid_fix_map.csv
+  # 输出 UPDATE SQL（可直接执行修复）
+  sqlPath: tmp/textid_fix_map.sql
+  overwrite: true
+
+db:
+  # MySQL 目标表
+  table: text_main
+  # 从哪个环境变量读取 DSN（格式: mysql://user:pass@host:port/db?charset=utf8mb4）
+  dsnEnv: LOTRO_DATABASE_DSN

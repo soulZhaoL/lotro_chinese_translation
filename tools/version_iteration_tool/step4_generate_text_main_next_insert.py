@@ -199,16 +199,20 @@ def _sql_literal(value: Any) -> str:
 
 def _build_patterns(id_pattern: str) -> Tuple[re.Pattern[str], re.Pattern[str], re.Pattern[str]]:
     # 与 tools/valid_format/xlsx_format_check.py 的 3 种格式保持一致。
+    # textId 命名组必须包含完整业务标识：
+    #   格式1 {num}::::::[text]        → textId = {num}
+    #   格式2 {num}:::{n}:::[text]     → textId = {num}:::{n}
+    #   格式3 {num}:::{m-n}:::[text]   → textId = {num}:::{m-n}
     pattern_colon6 = re.compile(
         rf"^(?P<textId>{id_pattern})::::::\[(?P<sourceText>.*)\]$",
         re.DOTALL,
     )
     pattern_triple_colon_num = re.compile(
-        rf"^(?P<textId>{id_pattern}):::\d+:::\[(?P<sourceText>.*)\]$",
+        rf"^(?P<textId>{id_pattern}:::\d+):::\[(?P<sourceText>.*)\]$",
         re.DOTALL,
     )
     pattern_triple_colon_range = re.compile(
-        rf"^(?P<textId>{id_pattern}):::\d+(?:-\d+)+:::\[(?P<sourceText>.*)\]$",
+        rf"^(?P<textId>{id_pattern}:::\d+(?:-\d+)+):::\[(?P<sourceText>.*)\]$",
         re.DOTALL,
     )
     return pattern_colon6, pattern_triple_colon_num, pattern_triple_colon_range

@@ -6,13 +6,13 @@
 
 ## 1. 数据模型与迁移策略
 - [x] 1.1 在 `server/migrations/001_init.sql` 中将 `text_main.textId` 从 `BIGINT` 调整为 `VARCHAR`，并同步检查唯一约束/索引定义，验证 why.md#需求-按字符串-textid-精确查询与筛选-场景-通过复合-textid-查询
-- [ ] 1.2 产出"错误 fid+textId → 正确 fid+textId"的对照结果生成方案，并实现可导出的映射结果（SQL/脚本/临时表），验证 why.md#需求-生成错误正确-textid-对照结果-场景-生成修复映射
+- [x] 1.2 产出"错误 fid+textId → 正确 fid+textId"的对照结果生成方案，并实现可导出的映射结果（SQL/脚本/临时表），验证 why.md#需求-生成错误正确-textid-对照结果-场景-生成修复映射（实现: tools/fix_textid/generate_textid_fix_map.py，已修正正则使其提取完整字符串 textId，输出 CSV + UPDATE SQL）
 - [x] 1.3 评估并确认 80 万行下 `textId` 改为字符串后的索引保留策略，输出到知识库与方案实现中，验证 why.md#需求-字符串-textid-索引可支撑-80-万行查询-场景-评估索引保留策略（结论见 how.md ADR-003，SQL 已含正确索引定义）
-- [ ] 1.4 在 `helloagents/wiki/data.md` 中更新 `text_main.textId` 与相关索引的数据模型说明，验证 why.md#需求-字符串-textid-索引可支撑-80-万行查询-场景-评估索引保留策略
+- [x] 1.4 在 `helloagents/wiki/data.md` 中更新 `text_main.textId` 与相关索引的数据模型说明，验证 why.md#需求-字符串-textid-索引可支撑-80-万行查询-场景-评估索引保留策略
 
 ## 2. 工具链解析修正
-- [x] 2.1 在 `tools/valid_format/xlsx_to_insert_segmented.py` 中修改协议段解析逻辑，使三类协议都返回完整字符串 textId，并同步更新行构造类型，验证 why.md#需求-协议段完整提取-textid-场景-解析复合协议头
-- [x] 2.2 在 `tools/version_iteration_tool/step4_generate_text_main_next_insert.py` 中修改协议段解析逻辑，使 Step4 生成 SQL 时写入完整字符串 textId，验证 why.md#需求-协议段完整提取-textid-场景-解析复合协议头
+- [x] 2.1 在 `tools/valid_format/xlsx_to_insert_segmented.py` 中修改协议段解析逻辑，使三类协议都返回完整字符串 textId，并同步更新行构造类型，验证 why.md#需求-协议段完整提取-textid-场景-解析复合协议头（_build_patterns 已修正：格式2/3 的 textId 命名组现包含完整 `:::n`/`:::m-n` 部分）
+- [x] 2.2 在 `tools/version_iteration_tool/step4_generate_text_main_next_insert.py` 中修改协议段解析逻辑，使 Step4 生成 SQL 时写入完整字符串 textId，验证 why.md#需求-协议段完整提取-textid-场景-解析复合协议头（_build_patterns 已修正：格式2/3 的 textId 命名组现包含完整 `:::n`/`:::m-n` 部分）
 - [x] 2.3 复查 `tools/valid_format/xlsx_to_insert.py` 与相关配置/注释，明确其是否继续使用、是否需要同步支持字符串 textId，验证 why.md#需求-协议段完整提取-textid-场景-解析复合协议头（结论：该工具不解析协议段，无需修改）
 
 ## 3. 版本迭代链路修正
@@ -23,7 +23,7 @@
 ## 4. 后端接口与类型修正
 - [x] 4.1 在 `server/routes/texts.py` 中将列表、下载、children、by-textid 的 `textId` 查询参数统一改为字符串，并移除数值型假设，验证 why.md#需求-按字符串-textid-精确查询与筛选-场景-通过复合-textid-查询
 - [x] 4.2 复查 `server/routes/validate.py`、`server/routes/changes.py`、`server/routes/claims.py`、`server/routes/locks.py` 中与业务 textId 混淆的逻辑，区分内部 `id` 与业务 `textId`（各路由的 textId 字段已改名为 id，明确语义）
-- [ ] 4.3 更新 `helloagents/wiki/api.md` 与 `helloagents/wiki/modules/text.md` 的接口参数与响应说明，验证 why.md#需求-按字符串-textid-精确查询与筛选-场景-通过复合-textid-查询
+- [x] 4.3 更新 `helloagents/wiki/api.md` 与 `helloagents/wiki/modules/text.md` 的接口参数与响应说明，验证 why.md#需求-按字符串-textid-精确查询与筛选-场景-通过复合-textid-查询
 
 ## 5. 前端筛选与页面修正
 - [x] 5.1 在 `web/src/modules/texts/types.ts`、`web/src/modules/texts/list/filter.tsx`、`web/src/modules/texts/list/index.tsx`、`web/src/modules/texts/list/table.tsx` 中统一 textId 为字符串查询语义，验证 why.md#需求-按字符串-textid-精确查询与筛选-场景-通过复合-textid-查询

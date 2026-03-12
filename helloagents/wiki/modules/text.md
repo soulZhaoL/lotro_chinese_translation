@@ -26,7 +26,7 @@
 
 ### [GET] /texts/children
 **描述:** 子列表（按 fid 展开）
-**输入:** fid（必填）/textId（可选）/sourceKeyword（可选）/translatedKeyword（可选）/分页（默认排除 part=1）
+**输入:** fid（必填）/textId（可选，字符串精确匹配）/sourceKeyword（可选）/translatedKeyword（可选）/分页（默认排除 part=1）
 **输出:** 指定 fid 的拆分列表
 
 ### [GET] /texts/by-textid
@@ -36,7 +36,7 @@
 
 ### [POST] /locks
 **描述:** 锁定文本
-**输入:** textId
+**输入:** `id`（text_main.id 内部主键，非业务 textId）
 **输出:** 锁定结果
 
 ### [PUT] /texts/{textId}/translate
@@ -68,9 +68,9 @@
 ### text_main
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | bigint | 主键 |
+| id | bigint | 主键（内部自增 ID，供外键关联） |
 | fid | varchar | 文件标识 |
-| textId | bigint | 文本标识 |
+| textId | varchar(255) | 业务文本标识（字符串，支持复合格式） |
 | part | int | 分段顺序 |
 | sourceText | text | 原文（允许为空） |
 | translatedText | text | 译文 |
@@ -82,7 +82,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | bigint | 主键 |
-| textId | bigint | 关联主文本 |
+| textId | bigint | 关联 text_main.id（内部主键） |
 | beforeText | text | 变更前 |
 | afterText | text | 变更后 |
 
@@ -94,11 +94,13 @@
 ## 实施说明
 - 列表与详情接口已落地（/texts/parents, /texts/children, /texts/by-textid）
 - 认领与锁定接口已落地（/claims, /locks），释放使用 text_locks.releasedAt 标记
-- 变更历史查询已落地（/changes）
+- 变更历史查询已落地（/changes），查询参数为 `id`（text_main.id）
+- **textId 字段类型**：`text_main.textId` 已从 BIGINT 改为 VARCHAR(255)，支持复合格式（如 `126853056:::337429-296068`）；`text_claims/locks/changes.textId` 保持 BIGINT，关联 `text_main.id` 内部主键
+- **/claims、/locks 请求体**：字段名从 `textId` 改为 `id`（明确为内部主键，非业务 textId）
 - 主文本列表补充原文/译文/编辑次数显示，长文本使用截断+悬浮展示
 - 列表接口对 sourceText/translatedText 超长内容截断（配置 `text_list.max_text_length`）
 - 数据库编码需为 UTF8，以兼容稀有符号与带音节字符
-- 提供 xlsx 批量导入脚本 `tools/valid_format/xlsx_to_insert.py`（按行范围与分块生成 INSERT） 
+- 提供 xlsx 批量导入脚本 `tools/valid_format/xlsx_to_insert.py`（按行范围与分块生成 INSERT）
 - 新增模板化下载/上传闭环：导出按筛选条件执行；上传按 `编号` 定位并强校验 `FID/TextId/Part`，失败即整批回滚，成功后统一写入 `text_changes`
 - 导出链路支持大数据量安全导出：服务端流式查询、分批写入、临时文件回传，避免高峰内存占用
 
@@ -107,3 +109,4 @@
 - 2026-02-08：textId 拆分、父/子列表与 fid+textId 查询
 - 2026-02-11：数据库与 API 字段统一 camelCase
 - 2026-03-01：新增文本模板下载/上传（离线翻译回传）
+- 2026-03-12：text_main.textId 从 BIGINT 改为 VARCHAR(255)，支持复合协议格式；/claims、/locks 请求体字段名从 textId 改为 id；/changes 查询参数从 textId 改为 id
