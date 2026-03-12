@@ -209,16 +209,21 @@ def _split_translation_into_rows(fid: str, translation: str) -> List[List[str]]:
 
 
 def _merge_fid_rows(fid_rows: List[Dict[str, Any]]) -> Tuple[str, str]:
-    """合并同一 fid 的多个 part 为一行 Excel 数据，还原 textId::::::[text] 协议格式。
+    """合并同一 fid 的多个 part 为一行，还原分段协议格式。
+    - textId 不含 ':::' → textId::::::[text]   (格式1)
+    - textId 含 ':::'   → textId:::[text]       (格式2/3)
     空译文取原文填充。返回 (fid, translation)。
     """
     fid = fid_rows[0]["fid"]
     translated_segments = []
     for row in fid_rows:
-        text_id = row["textId"]
+        text_id = str(row["textId"])
         source = row["sourceText"] or ""
         translated = row["translatedText"] or source
-        translated_segments.append(f"{text_id}::::::[{translated}]")
+        if ":::" in text_id:
+            translated_segments.append(f"{text_id}:::[{translated}]")
+        else:
+            translated_segments.append(f"{text_id}::::::[{translated}]")
 
     return fid, "|||".join(translated_segments)
 
