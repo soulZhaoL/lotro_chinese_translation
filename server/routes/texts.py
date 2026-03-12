@@ -954,6 +954,7 @@ def download_package(
 
         conditions, params = _build_download_conditions(
             fid=fid,
+            textId=None,
             status_filter=status_filter,
             sourceKeyword=sourceKeyword,
             translatedKeyword=translatedKeyword,
