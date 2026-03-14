@@ -248,8 +248,8 @@ def _build_download_conditions(
     if textId is not None:
         if textId == "":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="textId 不能为空")
-        conditions.append('tm."textId" = %s')
-        params.append(textId)
+        conditions.append('tm."textId" LIKE %s')
+        params.append(f"{textId}%")
     if status_filter is not None:
         if status_filter not in (1, 2, 3):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status 必须为 1/2/3")
@@ -604,8 +604,8 @@ def list_child_texts(
     params: List[Any] = [fid]
     where_clause = "WHERE tm.fid = %s AND tm.part <> 1"
     if textId is not None:
-        where_clause += ' AND tm."textId" = %s'
-        params.append(textId)
+        where_clause += ' AND tm."textId" LIKE %s'
+        params.append(f"{textId}%")
     if sourceKeyword is not None:
         where_clause += ' AND tm."sourceText" LIKE %s'
         params.append(f"%{sourceKeyword}%")
@@ -616,18 +616,6 @@ def list_child_texts(
     max_text_length = config["text_list"]["max_text_length"]
 
     with db_cursor() as cursor:
-        if textId is not None:
-            cursor.execute(
-                """
-                SELECT COUNT(*) AS cnt
-                FROM text_main
-                WHERE fid = %s AND "textId" = %s
-                """,
-                (fid, textId),
-            )
-            if cursor.fetchone()["cnt"] > 1:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="textId 在该 fid 下存在重复数据")
-
         cursor.execute(
             f"""
             SELECT COUNT(*) AS total
