@@ -4,13 +4,17 @@ import { Button, Popconfirm, Popover, Space, Tag, Typography, message } from "an
 import { apiFetch, getErrorMessage } from "../../../api";
 import { formatDateTime } from "../../../utils/datetime";
 import { TEXT_STATUS_META, TEXT_STATUS_VALUE_ENUM } from "../constants";
-import type { ActiveConfirmState, TextItem } from "../types";
+import type { ActiveConfirmState, TextItem, TextMatchMode } from "../types";
 
 const DISPLAY_LIMIT = 200;
 const TOOLTIP_LIMIT = 5000;
 const MIN_ACTION_DELAY_MS = 300;
 const ACTION_COLUMN_WIDTH = 220;
 const POPOVER_MAX_WIDTH = "min(620px, calc(100vw - 48px))";
+const TEXT_MATCH_MODE_VALUE_ENUM: Record<TextMatchMode, { text: string }> = {
+  fuzzy: { text: "模糊" },
+  exact: { text: "精确" },
+};
 
 async function ensureMinDelay(startAt: number, minMs: number) {
   const elapsed = Date.now() - startAt;
@@ -256,7 +260,9 @@ type CommonActionDeps = {
 
 type ParentColumnsDeps = CommonActionDeps & {
   sourceKeyword?: string;
+  sourceMatchMode?: TextMatchMode;
   translatedKeyword?: string;
+  translatedMatchMode?: TextMatchMode;
   onParentChanged: () => void;
 };
 
@@ -269,7 +275,9 @@ export function createParentColumns({
   setActiveConfirm,
   navigateWithState,
   sourceKeyword,
+  sourceMatchMode,
   translatedKeyword,
+  translatedMatchMode,
   onParentChanged,
 }: ParentColumnsDeps): ProColumns<TextItem>[] {
   return [
@@ -300,14 +308,15 @@ export function createParentColumns({
       dataIndex: "sourceText",
       hideInSearch: true,
       width: 360,
-      render: (_, record) => renderLongText(record.sourceText, sourceKeyword),
+      render: (_, record) => renderLongText(record.sourceText, sourceMatchMode === "fuzzy" ? sourceKeyword : undefined),
     },
     {
       title: "译文",
       dataIndex: "translatedText",
       hideInSearch: true,
       width: 360,
-      render: (_, record) => renderLongText(record.translatedText, translatedKeyword),
+      render: (_, record) =>
+        renderLongText(record.translatedText, translatedMatchMode === "fuzzy" ? translatedKeyword : undefined),
     },
     {
       title: "状态",
@@ -357,7 +366,23 @@ export function createParentColumns({
       valueEnum: TEXT_STATUS_VALUE_ENUM,
     },
     { title: "原文关键字", dataIndex: "sourceKeyword", hideInTable: true },
+    {
+      title: "原文匹配",
+      dataIndex: "sourceMatchMode",
+      valueType: "select",
+      hideInTable: true,
+      initialValue: "fuzzy",
+      valueEnum: TEXT_MATCH_MODE_VALUE_ENUM,
+    },
     { title: "汉化关键字", dataIndex: "translatedKeyword", hideInTable: true },
+    {
+      title: "汉化匹配",
+      dataIndex: "translatedMatchMode",
+      valueType: "select",
+      hideInTable: true,
+      initialValue: "fuzzy",
+      valueEnum: TEXT_MATCH_MODE_VALUE_ENUM,
+    },
     {
       title: "更新时间范围",
       dataIndex: "uptTime",

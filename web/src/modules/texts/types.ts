@@ -1,4 +1,5 @@
 export type TextStatus = 1 | 2 | 3;
+export type TextMatchMode = "fuzzy" | "exact";
 
 export interface TextClaim {
   id: number;
@@ -43,7 +44,9 @@ export interface QueryParams {
   textId?: string;
   status?: number | string;
   sourceKeyword?: string;
+  sourceMatchMode?: TextMatchMode;
   translatedKeyword?: string;
+  translatedMatchMode?: TextMatchMode;
   updatedFrom?: string;
   updatedTo?: string;
   claimer?: string;

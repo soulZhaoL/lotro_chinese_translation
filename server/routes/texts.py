@@ -29,6 +29,7 @@ _package_download_lock = threading.Semaphore(1)
 STATUS_LABEL_TO_VALUE: Dict[str, int] = {"新增": 1, "修改": 2, "已完成": 3}
 STATUS_VALUE_TO_LABEL: Dict[int, str] = {value: label for label, value in STATUS_LABEL_TO_VALUE.items()}
 STATUS_VALUE_SET = {1, 2, 3}
+TEXT_MATCH_MODE_SET = {"fuzzy", "exact"}
 
 
 def _apply_pagination(page: int, page_size: int) -> int:
@@ -37,6 +38,23 @@ def _apply_pagination(page: int, page_size: int) -> int:
     if page_size < 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 必须 >= 1")
     return (page - 1) * page_size
+
+
+def _parse_text_match_mode(value: Optional[str], field_name: str) -> str:
+    if value is None or value == "":
+        return "fuzzy"
+    if value not in TEXT_MATCH_MODE_SET:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name} 必须为 fuzzy/exact",
+        )
+    return value
+
+
+def _build_text_match_clause(column_sql: str, keyword: str, match_mode: str) -> Tuple[str, str]:
+    if match_mode == "exact":
+        return f"{column_sql} = %s", keyword
+    return f"{column_sql} LIKE %s", f"%{keyword}%"
 
 
 def _is_empty_cell(value: Any) -> bool:
@@ -233,7 +251,9 @@ def _build_download_conditions(
     textId: Optional[str],
     status_filter: Optional[int],
     sourceKeyword: Optional[str],
+    sourceMatchMode: str,
     translatedKeyword: Optional[str],
+    translatedMatchMode: str,
     updatedFrom: Optional[str],
     updatedTo: Optional[str],
     claimer: Optional[str],
@@ -256,11 +276,15 @@ def _build_download_conditions(
         conditions.append("tm.status = %s")
         params.append(status_filter)
     if sourceKeyword is not None:
-        conditions.append('tm."sourceText" LIKE %s')
-        params.append(f"%{sourceKeyword}%")
+        condition_sql, condition_param = _build_text_match_clause('tm."sourceText"', sourceKeyword, sourceMatchMode)
+        conditions.append(condition_sql)
+        params.append(condition_param)
     if translatedKeyword is not None:
-        conditions.append('tm."translatedText" LIKE %s')
-        params.append(f"%{translatedKeyword}%")
+        condition_sql, condition_param = _build_text_match_clause(
+            'tm."translatedText"', translatedKeyword, translatedMatchMode
+        )
+        conditions.append(condition_sql)
+        params.append(condition_param)
     if updatedFrom is not None:
         conditions.append('tm."uptTime" >= %s')
         params.append(updatedFrom)
@@ -295,7 +319,9 @@ def list_texts(
     textId: Optional[str] = Query(default=None, alias="textId"),
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
+    sourceMatchModeRaw: Optional[str] = Query(default=None, alias="sourceMatchMode"),
     translatedKeyword: Optional[str] = None,
+    translatedMatchModeRaw: Optional[str] = Query(default=None, alias="translatedMatchMode"),
     updatedFrom: Optional[str] = None,
     updatedTo: Optional[str] = None,
     claimer: Optional[str] = None,
@@ -309,6 +335,8 @@ def list_texts(
     pagination = config["pagination"]
     default_page_size = pagination["default_page_size"]
     max_page_size = pagination["max_page_size"]
+    source_match_mode = _parse_text_match_mode(sourceMatchModeRaw, "sourceMatchMode")
+    translated_match_mode = _parse_text_match_mode(translatedMatchModeRaw, "translatedMatchMode")
 
     effective_page_size = pageSize if pageSize is not None else default_page_size
     if effective_page_size > max_page_size:
@@ -320,7 +348,9 @@ def list_texts(
         textId=textId,
         status_filter=status_filter,
         sourceKeyword=sourceKeyword,
+        sourceMatchMode=source_match_mode,
         translatedKeyword=translatedKeyword,
+        translatedMatchMode=translated_match_mode,
         updatedFrom=updatedFrom,
         updatedTo=updatedTo,
         claimer=claimer,
@@ -413,7 +443,9 @@ def list_parent_texts(
     fid: Optional[str] = None,
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
+    sourceMatchModeRaw: Optional[str] = Query(default=None, alias="sourceMatchMode"),
     translatedKeyword: Optional[str] = None,
+    translatedMatchModeRaw: Optional[str] = Query(default=None, alias="translatedMatchMode"),
     updatedFrom: Optional[str] = None,
     updatedTo: Optional[str] = None,
     claimer: Optional[str] = None,
@@ -427,6 +459,8 @@ def list_parent_texts(
     pagination = config["pagination"]
     default_page_size = pagination["default_page_size"]
     max_page_size = pagination["max_page_size"]
+    source_match_mode = _parse_text_match_mode(sourceMatchModeRaw, "sourceMatchMode")
+    translated_match_mode = _parse_text_match_mode(translatedMatchModeRaw, "translatedMatchMode")
 
     effective_page_size = pageSize if pageSize is not None else default_page_size
     if effective_page_size > max_page_size:
@@ -448,29 +482,33 @@ def list_parent_texts(
         conditions.append("tm.status = %s")
         params.append(status_filter)
     if sourceKeyword is not None:
+        condition_sql, condition_param = _build_text_match_clause('tmx."sourceText"', sourceKeyword, source_match_mode)
         conditions.append(
-            """
+            f"""
             EXISTS (
                 SELECT 1
                 FROM text_main tmx
                 WHERE tmx.fid = tm.fid
-                  AND tmx."sourceText" LIKE %s
+                  AND {condition_sql}
             )
             """
         )
-        params.append(f"%{sourceKeyword}%")
+        params.append(condition_param)
     if translatedKeyword is not None:
+        condition_sql, condition_param = _build_text_match_clause(
+            'tmx."translatedText"', translatedKeyword, translated_match_mode
+        )
         conditions.append(
-            """
+            f"""
             EXISTS (
                 SELECT 1
                 FROM text_main tmx
                 WHERE tmx.fid = tm.fid
-                  AND tmx."translatedText" LIKE %s
+                  AND {condition_sql}
             )
             """
         )
-        params.append(f"%{translatedKeyword}%")
+        params.append(condition_param)
     if updatedFrom is not None:
         conditions.append('tm."uptTime" >= %s')
         params.append(updatedFrom)
@@ -584,7 +622,9 @@ def list_child_texts(
     fid: str,
     textId: Optional[str] = Query(default=None, alias="textId"),
     sourceKeyword: Optional[str] = None,
+    sourceMatchModeRaw: Optional[str] = Query(default=None, alias="sourceMatchMode"),
     translatedKeyword: Optional[str] = None,
+    translatedMatchModeRaw: Optional[str] = Query(default=None, alias="translatedMatchMode"),
     page: int = 1,
     pageSize: Optional[int] = Query(default=None, alias="pageSize"),
     _: Dict[str, Any] = Depends(require_auth),
@@ -594,6 +634,8 @@ def list_child_texts(
     pagination = config["pagination"]
     default_page_size = pagination["default_page_size"]
     max_page_size = pagination["max_page_size"]
+    source_match_mode = _parse_text_match_mode(sourceMatchModeRaw, "sourceMatchMode")
+    translated_match_mode = _parse_text_match_mode(translatedMatchModeRaw, "translatedMatchMode")
 
     effective_page_size = pageSize if pageSize is not None else default_page_size
     if effective_page_size > max_page_size:
@@ -607,11 +649,15 @@ def list_child_texts(
         where_clause += ' AND tm."textId" LIKE %s'
         params.append(f"{textId}%")
     if sourceKeyword is not None:
-        where_clause += ' AND tm."sourceText" LIKE %s'
-        params.append(f"%{sourceKeyword}%")
+        condition_sql, condition_param = _build_text_match_clause('tm."sourceText"', sourceKeyword, source_match_mode)
+        where_clause += f" AND {condition_sql}"
+        params.append(condition_param)
     if translatedKeyword is not None:
-        where_clause += ' AND tm."translatedText" LIKE %s'
-        params.append(f"%{translatedKeyword}%")
+        condition_sql, condition_param = _build_text_match_clause(
+            'tm."translatedText"', translatedKeyword, translated_match_mode
+        )
+        where_clause += f" AND {condition_sql}"
+        params.append(condition_param)
 
     max_text_length = config["text_list"]["max_text_length"]
 
@@ -718,7 +764,9 @@ def download_texts(
     textId: Optional[str] = Query(default=None, alias="textId"),
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
+    sourceMatchModeRaw: Optional[str] = Query(default=None, alias="sourceMatchMode"),
     translatedKeyword: Optional[str] = None,
+    translatedMatchModeRaw: Optional[str] = Query(default=None, alias="translatedMatchMode"),
     updatedFrom: Optional[str] = None,
     updatedTo: Optional[str] = None,
     claimer: Optional[str] = None,
@@ -738,6 +786,8 @@ def download_texts(
         claimer,
         claimed,
     )
+    source_match_mode = _parse_text_match_mode(sourceMatchModeRaw, "sourceMatchMode")
+    translated_match_mode = _parse_text_match_mode(translatedMatchModeRaw, "translatedMatchMode")
     config = get_config()
     text_import_export = config["text_import_export"]
     max_download_rows = text_import_export["max_download_rows"]
@@ -753,7 +803,9 @@ def download_texts(
         textId=textId,
         status_filter=status_filter,
         sourceKeyword=sourceKeyword,
+        sourceMatchMode=source_match_mode,
         translatedKeyword=translatedKeyword,
+        translatedMatchMode=translated_match_mode,
         updatedFrom=updatedFrom,
         updatedTo=updatedTo,
         claimer=claimer,
@@ -897,7 +949,9 @@ def download_package(
     fid: Optional[str] = None,
     status_filter: Optional[int] = Query(default=None, alias="status"),
     sourceKeyword: Optional[str] = None,
+    sourceMatchModeRaw: Optional[str] = Query(default=None, alias="sourceMatchMode"),
     translatedKeyword: Optional[str] = None,
+    translatedMatchModeRaw: Optional[str] = Query(default=None, alias="translatedMatchMode"),
     updatedFrom: Optional[str] = None,
     updatedTo: Optional[str] = None,
     claimer: Optional[str] = None,
@@ -920,6 +974,8 @@ def download_package(
         claimer,
         claimed,
     )
+    source_match_mode = _parse_text_match_mode(sourceMatchModeRaw, "sourceMatchMode")
+    translated_match_mode = _parse_text_match_mode(translatedMatchModeRaw, "translatedMatchMode")
     if not _package_download_lock.acquire(blocking=False):
         logger.warning(
             "download_package rejected: semaphore busy elapsedSec={:.3f}",
@@ -945,7 +1001,9 @@ def download_package(
             textId=None,
             status_filter=status_filter,
             sourceKeyword=sourceKeyword,
+            sourceMatchMode=source_match_mode,
             translatedKeyword=translatedKeyword,
+            translatedMatchMode=translated_match_mode,
             updatedFrom=updatedFrom,
             updatedTo=updatedTo,
             claimer=claimer,

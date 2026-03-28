@@ -50,6 +50,16 @@ function normalizeDateTime(value: unknown): string | undefined {
   return value ? value : undefined;
 }
 
+function normalizeMatchMode(value: unknown): QueryParams["sourceMatchMode"] | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  if (value === "fuzzy" || value === "exact") {
+    return value;
+  }
+  return undefined;
+}
+
 function normalizeRange(range: unknown): { updatedFrom?: string; updatedTo?: string } {
   if (!Array.isArray(range)) {
     return {};
@@ -67,7 +77,9 @@ export function normalizeQueryParams(raw: Partial<QueryParams> & { uptTime?: [st
     textId: normalizeString(raw.textId),
     status: normalizeStatus(raw.status),
     sourceKeyword: normalizeString(raw.sourceKeyword),
+    sourceMatchMode: normalizeMatchMode(raw.sourceMatchMode),
     translatedKeyword: normalizeString(raw.translatedKeyword),
+    translatedMatchMode: normalizeMatchMode(raw.translatedMatchMode),
     updatedFrom: normalizeDateTime(raw.updatedFrom) || range.updatedFrom,
     updatedTo: normalizeDateTime(raw.updatedTo) || range.updatedTo,
     claimer: normalizeString(raw.claimer),
@@ -93,8 +105,14 @@ export function buildDownloadQuery(params: QueryParams): URLSearchParams {
   if (params.sourceKeyword) {
     query.set("sourceKeyword", params.sourceKeyword);
   }
+  if (params.sourceMatchMode) {
+    query.set("sourceMatchMode", params.sourceMatchMode);
+  }
   if (params.translatedKeyword) {
     query.set("translatedKeyword", params.translatedKeyword);
+  }
+  if (params.translatedMatchMode) {
+    query.set("translatedMatchMode", params.translatedMatchMode);
   }
   if (params.updatedFrom) {
     query.set("updatedFrom", params.updatedFrom);

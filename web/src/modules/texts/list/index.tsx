@@ -210,10 +210,21 @@ export default function TextsList() {
         setActiveConfirm,
         navigateWithState,
         sourceKeyword: parentSearch.sourceKeyword,
+        sourceMatchMode: parentSearch.sourceMatchMode,
         translatedKeyword: parentSearch.translatedKeyword,
+        translatedMatchMode: parentSearch.translatedMatchMode,
         onParentChanged: () => actionRef.current?.reload(),
       }),
-    [activeConfirm, claimingId, navigateWithState, parentSearch.sourceKeyword, parentSearch.translatedKeyword, releasingId]
+    [
+      activeConfirm,
+      claimingId,
+      navigateWithState,
+      parentSearch.sourceKeyword,
+      parentSearch.sourceMatchMode,
+      parentSearch.translatedKeyword,
+      parentSearch.translatedMatchMode,
+      releasingId,
+    ]
   );
 
   return (
@@ -277,7 +288,9 @@ export default function TextsList() {
             if (normalized.textId) query.set("textId", normalized.textId);
             if (normalized.status !== undefined) query.set("status", String(normalized.status));
             if (normalized.sourceKeyword) query.set("sourceKeyword", normalized.sourceKeyword);
+            if (normalized.sourceMatchMode) query.set("sourceMatchMode", normalized.sourceMatchMode);
             if (normalized.translatedKeyword) query.set("translatedKeyword", normalized.translatedKeyword);
+            if (normalized.translatedMatchMode) query.set("translatedMatchMode", normalized.translatedMatchMode);
             if (normalized.updatedFrom) query.set("updatedFrom", normalized.updatedFrom);
             if (normalized.updatedTo) query.set("updatedTo", normalized.updatedTo);
             if (normalized.claimer) query.set("claimer", normalized.claimer);
