@@ -238,6 +238,20 @@ def _parse_segment(
     return matched.group("textId"), text
 
 
+def _validate_segment_text_structure(text: str) -> Optional[str]:
+    square_open = text.count("[")
+    square_close = text.count("]")
+    if square_open != square_close:
+        return f"unbalanced []: open={square_open}, close={square_close}"
+
+    brace_open = text.count("{")
+    brace_close = text.count("}")
+    if brace_open != brace_close:
+        return f"unbalanced {{}}: open={brace_open}, close={brace_close}"
+
+    return None
+
+
 def _write_insert_sql(handle, table_name: str, columns: List[str], rows: List[List[str]]) -> None:
     if not rows:
         return
@@ -336,6 +350,15 @@ def main() -> None:
                         )
 
                     text_id, source_text = parsed
+                    structure_error = _validate_segment_text_structure(source_text)
+                    if structure_error is not None:
+                        if config["invalidSegmentPolicy"] == "skip":
+                            continue
+                        preview = source_text[:200].replace("\n", "\\n")
+                        raise RuntimeError(
+                            f"分段内容结构非法: fid={fid_value}, segmentIndex={segment_index}, "
+                            f"error={structure_error}, segment={preview}"
+                        )
                     source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
 
                     part += 1

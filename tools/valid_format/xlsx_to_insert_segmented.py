@@ -342,14 +342,21 @@ def _parse_segment(
     )
     if matched is None:
         return None
-    text = matched.group("text")
-    # 正则末尾的 \]$ 可能误消耗 text 中游戏标签（如 [ps]）的结尾 ]。
-    # 若 text 里 [ 比 ] 多，说明有 ] 被协议结尾吃掉，补回差量。
-    open_count = text.count("[")
-    close_count = text.count("]")
-    if open_count > close_count:
-        text = text + "]" * (open_count - close_count)
-    return matched.group("textId"), text
+    return matched.group("textId"), matched.group("text")
+
+
+def _validate_segment_text_structure(text: str) -> Optional[str]:
+    square_open = text.count("[")
+    square_close = text.count("]")
+    if square_open != square_close:
+        return f"unbalanced []: open={square_open}, close={square_close}"
+
+    brace_open = text.count("{")
+    brace_close = text.count("}")
+    if brace_open != brace_close:
+        return f"unbalanced {{}}: open={brace_open}, close={brace_close}"
+
+    return None
 
 
 def _is_blank_row(fid: str, source_text: str, translated_text: str) -> bool:
@@ -357,6 +364,7 @@ def _is_blank_row(fid: str, source_text: str, translated_text: str) -> bool:
 
 
 def _parse_cell_segments(
+    fid: str,
     raw_text: str,
     split_delimiter: str,
     patterns: Tuple[re.Pattern[str], re.Pattern[str], re.Pattern[str]],
@@ -364,23 +372,32 @@ def _parse_cell_segments(
     column_name: str,
 ) -> List[Tuple[str, str]]:
     if raw_text.strip() == "":
-        raise RowParseError(f"Row {row_index} {column_name} is empty")
+        raise RowParseError(f"Row {row_index} fid={fid} {column_name} is empty")
     pieces = raw_text.split(split_delimiter)
     if len(pieces) == 0:
-        raise RowParseError(f"Row {row_index} {column_name} has no segment")
+        raise RowParseError(f"Row {row_index} fid={fid} {column_name} has no segment")
 
     parsed: List[Tuple[int, str]] = []
     for idx, piece in enumerate(pieces, start=1):
         segment = piece.strip()
         if segment == "":
-            raise RowParseError(f"Row {row_index} {column_name} segment #{idx} is empty")
+            raise RowParseError(f"Row {row_index} fid={fid} {column_name} segment #{idx} is empty")
         extracted = _parse_segment(segment, patterns)
         if extracted is None:
             snippet = segment.replace("\n", "\\n")
             if len(snippet) > 120:
                 snippet = snippet[:117] + "..."
             raise RowParseError(
-                f"Row {row_index} {column_name} segment #{idx} format invalid: {snippet}"
+                f"Row {row_index} fid={fid} {column_name} segment #{idx} format invalid: {snippet}"
+            )
+        structure_error = _validate_segment_text_structure(extracted[1])
+        if structure_error is not None:
+            snippet = extracted[1].replace("\n", "\\n")
+            if len(snippet) > 120:
+                snippet = snippet[:117] + "..."
+            raise RowParseError(
+                f"Row {row_index} fid={fid} {column_name} segment #{idx} content invalid: "
+                f"{structure_error}: {snippet}"
             )
         parsed.append(extracted)
     return parsed
@@ -470,12 +487,23 @@ def _build_output_rows_for_excel_row(
     is_claimed_value: bool,
 ) -> List[List[str]]:
     # 对单个 fid 的合并文本做协议拆分，并产出多条 INSERT 记录（每段一条）。
-    source_segments = _parse_cell_segments(source_raw, split_delimiter, patterns, row_index, "sourceText")
-    translated_segments = _parse_cell_segments(translated_raw, split_delimiter, patterns, row_index, "translatedText")
+    source_segments = _parse_cell_segments(fid, source_raw, split_delimiter, patterns, row_index, "sourceText")
+    if translated_raw.strip() == "":
+        translated_segments = [(text_id, "") for text_id, _ in source_segments]
+    else:
+        translated_segments = _parse_cell_segments(
+            fid,
+            translated_raw,
+            split_delimiter,
+            patterns,
+            row_index,
+            "translatedText",
+        )
 
     if len(source_segments) != len(translated_segments):
         raise RowParseError(
-            f"Row {row_index} segment count mismatch: source={len(source_segments)}, translated={len(translated_segments)}"
+            f"Row {row_index} fid={fid} segment count mismatch: "
+            f"source={len(source_segments)}, translated={len(translated_segments)}"
         )
 
     rows: List[List[str]] = []
@@ -484,7 +512,8 @@ def _build_output_rows_for_excel_row(
         translated_text_id, translated_text = translated_item
         if source_text_id != translated_text_id:
             raise RowParseError(
-                f"Row {row_index} segment #{idx} textId mismatch: source={source_text_id}, translated={translated_text_id}"
+                f"Row {row_index} fid={fid} segment #{idx} textId mismatch: "
+                f"source={source_text_id}, translated={translated_text_id}"
             )
         source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
         row_values = {
