@@ -72,14 +72,16 @@ function normalizeRange(range: unknown): { updatedFrom?: string; updatedTo?: str
 
 export function normalizeQueryParams(raw: Partial<QueryParams> & { uptTime?: [string, string] }): QueryParams {
   const range = normalizeRange(raw.uptTime);
+  const sourceKeyword = normalizeString(raw.sourceKeyword);
+  const translatedKeyword = normalizeString(raw.translatedKeyword);
   return {
     fid: normalizeString(raw.fid),
     textId: normalizeString(raw.textId),
     status: normalizeStatus(raw.status),
-    sourceKeyword: normalizeString(raw.sourceKeyword),
-    sourceMatchMode: normalizeMatchMode(raw.sourceMatchMode),
-    translatedKeyword: normalizeString(raw.translatedKeyword),
-    translatedMatchMode: normalizeMatchMode(raw.translatedMatchMode),
+    sourceKeyword,
+    sourceMatchMode: sourceKeyword ? normalizeMatchMode(raw.sourceMatchMode) : undefined,
+    translatedKeyword,
+    translatedMatchMode: translatedKeyword ? normalizeMatchMode(raw.translatedMatchMode) : undefined,
     updatedFrom: normalizeDateTime(raw.updatedFrom) || range.updatedFrom,
     updatedTo: normalizeDateTime(raw.updatedTo) || range.updatedTo,
     claimer: normalizeString(raw.claimer),
