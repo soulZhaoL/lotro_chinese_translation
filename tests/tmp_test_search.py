@@ -107,6 +107,62 @@ def test_keyword_search_supports_both_exact_modes_together(seed_user):
     assert data["items"][0]["fid"] == "file_combo_ok"
 
 
+def test_translated_keyword_search_exact_mode_on_flat_list(seed_user):
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_translated_exact_a", 1301, 1, "src alpha", "This", 1, 0),
+        )
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_translated_exact_b", 1302, 1, "src beta", "This item is obsolete.", 1, 0),
+        )
+
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/texts?translatedKeyword=This&translatedMatchMode=exact", headers=headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 1
+    assert data["items"][0]["fid"] == "file_translated_exact_a"
+
+
+def test_translated_keyword_search_exact_mode_on_parents(seed_user):
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_parent_translated_exact_a", 1401, 1, "src gamma", "This", 1, 0),
+        )
+        cursor.execute(
+            """
+            INSERT INTO text_main (fid, "textId", part, "sourceText", "translatedText", status, "editCount")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            ("file_parent_translated_exact_b", 1402, 1, "src delta", "This item is obsolete.", 1, 0),
+        )
+
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/texts/parents?translatedKeyword=This&translatedMatchMode=exact", headers=headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 1
+    assert data["items"][0]["fid"] == "file_parent_translated_exact_a"
+
+
 def test_flat_list_endpoint_returns_all_parts(seed_user):
     with db_cursor() as cursor:
         cursor.execute(

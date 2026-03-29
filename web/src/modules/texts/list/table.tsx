@@ -107,27 +107,19 @@ type KeywordMatchInputProps = {
 };
 
 function KeywordMatchInput({ matchModeField, placeholder, value, onChange }: KeywordMatchInputProps) {
-  const form = Form.useFormInstance();
-  const matchMode = Form.useWatch(matchModeField, form) as TextMatchMode | undefined;
-
   return (
     <Input
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange?.(event.target.value)}
       addonAfter={
-        <>
-          <Form.Item name={matchModeField} initialValue="fuzzy" hidden noStyle>
-            <Input />
-          </Form.Item>
+        <Form.Item name={matchModeField} initialValue="fuzzy" noStyle>
           <Select
-            value={matchMode || "fuzzy"}
             options={TEXT_MATCH_MODE_OPTIONS}
             popupMatchSelectWidth={false}
-            onChange={(nextValue) => form.setFieldValue(matchModeField, nextValue)}
             style={{ width: 84 }}
           />
-        </>
+        </Form.Item>
       }
     />
   );

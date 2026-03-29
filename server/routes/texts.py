@@ -57,6 +57,23 @@ def _build_text_match_clause(column_sql: str, keyword: str, match_mode: str) -> 
     return f"{column_sql} LIKE %s", f"%{keyword}%"
 
 
+def _log_text_filters(
+    route_name: str,
+    source_match_mode: str,
+    translated_match_mode: str,
+    where_clause: str,
+    params: List[Any],
+) -> None:
+    logger.info(
+        "{} filters: sourceMatchMode={} translatedMatchMode={} where_clause={} params={}",
+        route_name,
+        source_match_mode,
+        translated_match_mode,
+        where_clause if where_clause else "<empty>",
+        params,
+    )
+
+
 def _is_empty_cell(value: Any) -> bool:
     if value is None:
         return True
@@ -357,6 +374,7 @@ def list_texts(
         claimed=claimed,
     )
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    _log_text_filters("list_texts", source_match_mode, translated_match_mode, where_clause, params)
     max_text_length = config["text_list"]["max_text_length"]
 
     with db_cursor() as cursor:
@@ -535,6 +553,7 @@ def list_parent_texts(
         conditions.append('NOT EXISTS (SELECT 1 FROM text_claims c WHERE c."textId" = tm.id)')
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    _log_text_filters("list_parent_texts", source_match_mode, translated_match_mode, where_clause, params)
 
     max_text_length = config["text_list"]["max_text_length"]
 
