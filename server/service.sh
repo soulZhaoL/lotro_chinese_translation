@@ -75,7 +75,7 @@ is_running() {
 
 start_service() {
   if is_running; then
-    echo "[INFO] 服务已在运行 (PID: $(cat "${PID_PATH}"))"
+    echo "[INFO] 服务已在运行 (PID: $(cat "${PID_PATH}")) 日志: ${LOG_PATH}"
     exit 0
   fi
   if [[ -f "${PID_PATH}" ]]; then
@@ -84,26 +84,27 @@ start_service() {
   nohup uvicorn server.app:app --host "${LOTRO_BACKEND_HOST}" --port "${LOTRO_BACKEND_PORT}" \
     >> "${LOG_PATH}" 2>&1 &
   echo $! > "${PID_PATH}"
-  echo "[INFO] 已启动 (PID: $(cat "${PID_PATH}"))"
+  echo "[INFO] 已启动 (PID: $(cat "${PID_PATH}")) 日志: ${LOG_PATH}"
 }
 
 stop_service() {
   if ! is_running; then
     echo "[INFO] 服务未运行"
-    exit 0
+    return 0
   fi
   local pid
   pid="$(cat "${PID_PATH}")"
   kill "${pid}"
   echo "[INFO] 已发送停止信号 (PID: ${pid})"
+  return 0
 }
 
 status_service() {
   if is_running; then
-    echo "[INFO] 运行中 (PID: $(cat "${PID_PATH}"))"
+    echo "[INFO] 运行中 (PID: $(cat "${PID_PATH}")) 日志: ${LOG_PATH}"
     exit 0
   fi
-  echo "[INFO] 未运行"
+  echo "[INFO] 未运行 日志: ${LOG_PATH}"
 }
 
 case "${CMD}" in
