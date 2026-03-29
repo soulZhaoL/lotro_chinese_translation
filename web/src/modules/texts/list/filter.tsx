@@ -179,6 +179,17 @@ type DownloadOptions = {
   onProgress?: DownloadProgressHandler;
 };
 
+export function formatDownloadProgressText(baseLabel: string, snapshot: DownloadProgressSnapshot): string {
+  if (snapshot.stage === "preparing") {
+    return `${baseLabel}生成中...`;
+  }
+  if (snapshot.percent !== null) {
+    return `${baseLabel}传输中 ${snapshot.percent}%`;
+  }
+  const receivedMb = (snapshot.loadedBytes / (1024 * 1024)).toFixed(1);
+  return `${baseLabel}传输中 ${receivedMb}MB`;
+}
+
 function parseContentLength(headerValue: string | null): number | null {
   if (!headerValue) {
     return null;
@@ -309,9 +320,9 @@ export async function downloadTemplateFile(): Promise<DownloadFileResult> {
   return downloadByPath("/texts/template", "text_template.xlsx");
 }
 
-export async function downloadFilteredFile(search: QueryParams): Promise<DownloadFileResult> {
+export async function downloadFilteredFile(search: QueryParams, options?: DownloadOptions): Promise<DownloadFileResult> {
   const query = buildDownloadQuery(search);
-  return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx");
+  return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx", options);
 }
 
 export async function downloadPackageFile(search: QueryParams, options?: DownloadOptions): Promise<DownloadFileResult> {
@@ -322,6 +333,8 @@ export async function downloadPackageFile(search: QueryParams, options?: Downloa
 type SearchActionBarProps = {
   dom: ReactNode[];
   uploading: boolean;
+  downloadingFiltered: boolean;
+  filteredDownloadText: string;
   downloadingPackage: boolean;
   packageDownloadText: string;
   onDownloadFiltered: () => void;
@@ -333,6 +346,8 @@ type SearchActionBarProps = {
 export function SearchActionBar({
   dom,
   uploading,
+  downloadingFiltered,
+  filteredDownloadText,
   downloadingPackage,
   packageDownloadText,
   onDownloadFiltered,
@@ -354,7 +369,9 @@ export function SearchActionBar({
         {dom}
       </Space>
       <Space wrap size={8}>
-        <Button onClick={onDownloadFiltered}>导出</Button>
+        <Button loading={downloadingFiltered} onClick={onDownloadFiltered}>
+          {filteredDownloadText}
+        </Button>
         <Button loading={downloadingPackage} onClick={onDownloadPackage}>
           {packageDownloadText}
         </Button>

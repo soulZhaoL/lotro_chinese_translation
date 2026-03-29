@@ -16,6 +16,7 @@ import {
   downloadFilteredFile,
   downloadPackageFile,
   downloadTemplateFile,
+  formatDownloadProgressText,
   hasAnyFilter,
   normalizeQueryParams,
   resolveSearchParams,
@@ -37,6 +38,8 @@ export default function TextsList() {
   const [parentPageSize, setParentPageSize] = useState(20);
   const [restoreReady, setRestoreReady] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingFiltered, setDownloadingFiltered] = useState(false);
+  const [filteredDownloadStageText, setFilteredDownloadStageText] = useState("导出");
   const [downloadingPackage, setDownloadingPackage] = useState(false);
   const [packageDownloadStageText, setPackageDownloadStageText] = useState("下载汉化包");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,13 +110,22 @@ export default function TextsList() {
   }, []);
 
   const handleDownloadFiltered = useCallback(async () => {
+    if (downloadingFiltered) {
+      return;
+    }
     const currentSearch = resolveSearchParams(formRef, parentSearch);
     if (!hasAnyFilter(currentSearch)) {
       message.warning("请先设置筛选条件后再导出");
       return;
     }
     try {
-      const result = await downloadFilteredFile(currentSearch);
+      setDownloadingFiltered(true);
+      setFilteredDownloadStageText("导出生成中...");
+      const result = await downloadFilteredFile(currentSearch, {
+        onProgress: (progress: DownloadProgressSnapshot) => {
+          setFilteredDownloadStageText(formatDownloadProgressText("导出", progress));
+        },
+      });
       if (result === "mock_unsupported") {
         message.warning("Mock 模式不支持导出筛选结果");
         return;
@@ -121,8 +133,11 @@ export default function TextsList() {
       message.success("导出成功");
     } catch (error) {
       message.error(getErrorMessage(error, "导出失败"));
+    } finally {
+      setDownloadingFiltered(false);
+      setFilteredDownloadStageText("导出");
     }
-  }, [parentSearch]);
+  }, [downloadingFiltered, parentSearch]);
 
   const handleDownloadPackage = useCallback(async () => {
     if (downloadingPackage) {
@@ -134,16 +149,7 @@ export default function TextsList() {
     try {
       const result = await downloadPackageFile(currentSearch, {
         onProgress: (progress: DownloadProgressSnapshot) => {
-          if (progress.stage === "preparing") {
-            setPackageDownloadStageText("汉化包生成中...");
-            return;
-          }
-          if (progress.percent !== null) {
-            setPackageDownloadStageText(`汉化包传输中 ${progress.percent}%`);
-            return;
-          }
-          const receivedMb = (progress.loadedBytes / (1024 * 1024)).toFixed(1);
-          setPackageDownloadStageText(`汉化包传输中 ${receivedMb}MB`);
+          setPackageDownloadStageText(formatDownloadProgressText("汉化包", progress));
         },
       });
       if (result === "mock_unsupported") {
@@ -246,6 +252,8 @@ export default function TextsList() {
               key="search-actions"
               dom={dom}
               uploading={uploading}
+              downloadingFiltered={downloadingFiltered}
+              filteredDownloadText={filteredDownloadStageText}
               downloadingPackage={downloadingPackage}
               packageDownloadText={packageDownloadStageText}
               onDownloadFiltered={() => void handleDownloadFiltered()}
