@@ -345,7 +345,7 @@ def list_texts(
     claimed: Optional[bool] = None,
     page: int = 1,
     pageSize: Optional[int] = Query(default=None, alias="pageSize"),
-    _: Dict[str, Any] = Depends(require_auth),
+    user: Dict[str, Any] = Depends(require_auth),
 ):
     """获取平铺主文本列表（全量 part），支持筛选与分页。"""
     config = get_config()
@@ -446,6 +446,7 @@ def list_texts(
         for item in items:
             item["isClaimed"] = bool(item["isClaimed"])
 
+    logger.info("list_texts complete: total={} page={} pageSize={} userId={}", total, page, effective_page_size, user["userId"])
     return success_response(
         {
             "items": items,
@@ -470,7 +471,7 @@ def list_parent_texts(
     claimed: Optional[bool] = None,
     page: int = 1,
     pageSize: Optional[int] = Query(default=None, alias="pageSize"),
-    _: Dict[str, Any] = Depends(require_auth),
+    user: Dict[str, Any] = Depends(require_auth),
 ):
     """获取父级主文本列表（仅 part=1），支持筛选与分页。"""
     config = get_config()
@@ -626,6 +627,7 @@ def list_parent_texts(
         for item in items:
             item["isClaimed"] = bool(item["isClaimed"])
 
+    logger.info("list_parent_texts complete: total={} page={} pageSize={} userId={}", total, page, effective_page_size, user["userId"])
     return success_response(
         {
             "items": items,
@@ -646,9 +648,10 @@ def list_child_texts(
     translatedMatchModeRaw: Optional[str] = Query(default=None, alias="translatedMatchMode"),
     page: int = 1,
     pageSize: Optional[int] = Query(default=None, alias="pageSize"),
-    _: Dict[str, Any] = Depends(require_auth),
+    user: Dict[str, Any] = Depends(require_auth),
 ):
     """获取指定 fid 的子列表（默认排除 part=1），支持筛选与分页。"""
+    logger.info("list_child_texts start: fid={} textId={} page={} pageSize={} userId={}", fid, textId, page, pageSize, user["userId"])
     config = get_config()
     pagination = config["pagination"]
     default_page_size = pagination["default_page_size"]
@@ -749,6 +752,7 @@ def list_child_texts(
         for item in items:
             item["isClaimed"] = bool(item["isClaimed"])
 
+    logger.info("list_child_texts complete: fid={} total={} page={} pageSize={} userId={}", fid, total, page, effective_page_size, user["userId"])
     return success_response(
         {
             "items": items,
@@ -760,7 +764,7 @@ def list_child_texts(
 
 
 @router.get("/template")
-def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
+def download_text_template(user: Dict[str, Any] = Depends(require_auth)):
     """下载上传模板（仅表头）。"""
     workbook = Workbook()
     sheet = workbook.active
@@ -770,6 +774,7 @@ def download_text_template(_: Dict[str, Any] = Depends(require_auth)):
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
+    logger.info("download_text_template: userId={}", user["userId"])
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1312,9 +1317,10 @@ async def upload_text_template(
 def get_text_by_textid(
     fid: str,
     textId: str = Query(..., alias="textId"),
-    _: Dict[str, Any] = Depends(require_auth),
+    user: Dict[str, Any] = Depends(require_auth),
 ):
     """根据 fid + textId 获取主文本详情。"""
+    logger.info("get_text_by_textid start: fid={} textId={} userId={}", fid, textId, user["userId"])
     with db_cursor() as cursor:
         cursor.execute(
             """
@@ -1368,6 +1374,14 @@ def get_text_by_textid(
         )
         locks = cursor.fetchall()
 
+    logger.info(
+        "get_text_by_textid complete: fid={} textId={} claimCount={} lockCount={} userId={}",
+        fid,
+        textId,
+        len(claims),
+        len(locks),
+        user["userId"],
+    )
     return success_response(
         {
             "text": text,
@@ -1378,8 +1392,9 @@ def get_text_by_textid(
 
 
 @router.get("/{textId}")
-def get_text(textId: int, _: Dict[str, Any] = Depends(require_auth)):
+def get_text(textId: int, user: Dict[str, Any] = Depends(require_auth)):
     """获取主文本详情以及认领/锁定信息。"""
+    logger.info("get_text start: textId={} userId={}", textId, user["userId"])
     with db_cursor() as cursor:
         cursor.execute(
             """
@@ -1430,6 +1445,7 @@ def get_text(textId: int, _: Dict[str, Any] = Depends(require_auth)):
         )
         locks = cursor.fetchall()
 
+    logger.info("get_text complete: textId={} claimCount={} lockCount={} userId={}", textId, len(claims), len(locks), user["userId"])
     return success_response(
         {
             "text": text,
@@ -1489,4 +1505,5 @@ def update_translation(
             (textId, user["userId"], beforeText, request.translatedText, request.reason),
         )
 
+    logger.info("Translate complete: textId={} userId={} status={}", textId, user["userId"], 3 if request.isCompleted else 2)
     return success_response({"id": textId})

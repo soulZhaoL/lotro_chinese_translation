@@ -67,4 +67,5 @@ def release_claim(claimId: int, user: Dict[str, Any] = Depends(require_auth)):
 
         cursor.execute("DELETE FROM text_claims WHERE id = %s", (claimId,))
 
+    logger.info(f"Claim released: claimId={claimId} userId={user['userId']}")
     return success_response({"id": claimId})
