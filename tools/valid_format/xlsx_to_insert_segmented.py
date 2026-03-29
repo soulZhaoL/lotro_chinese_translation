@@ -276,7 +276,6 @@ def _validate_config(data: Dict[str, Any]) -> Dict[str, Any]:
         "behavior.rowErrorPolicy",
         ("error", "skip"),
     )
-
     if row_start <= 0:
         raise ConfigError("input.row_start must be > 0")
     if chunk_size <= 0:
@@ -341,8 +340,24 @@ def _parse_segment(
         or pattern_triple_colon_range.fullmatch(segment)
     )
     if matched is None:
-        return None
-    return matched.group("textId"), matched.group("text")
+        open_count = segment.count("[")
+        close_count = segment.count("]")
+        if open_count > close_count:
+            repaired = segment + ("]" * (open_count - close_count))
+            matched = (
+                pattern_colon6.fullmatch(repaired)
+                or pattern_triple_colon_num.fullmatch(repaired)
+                or pattern_triple_colon_range.fullmatch(repaired)
+            )
+        if matched is None:
+            return None
+
+    text = matched.group("text")
+    open_count = text.count("[")
+    close_count = text.count("]")
+    if open_count > close_count:
+        text = text + "]" * (open_count - close_count)
+    return matched.group("textId"), text
 
 
 def _validate_segment_text_structure(text: str) -> Optional[str]:
@@ -372,31 +387,31 @@ def _parse_cell_segments(
     column_name: str,
 ) -> List[Tuple[str, str]]:
     if raw_text.strip() == "":
-        raise RowParseError(f"Row {row_index} fid={fid} {column_name} is empty")
+        raise RowParseError(f"Row {row_index} fid= {fid} {column_name} is empty")
     pieces = raw_text.split(split_delimiter)
     if len(pieces) == 0:
-        raise RowParseError(f"Row {row_index} fid={fid} {column_name} has no segment")
+        raise RowParseError(f"Row {row_index} fid= {fid} {column_name} has no segment")
 
     parsed: List[Tuple[int, str]] = []
     for idx, piece in enumerate(pieces, start=1):
         segment = piece.strip()
         if segment == "":
-            raise RowParseError(f"Row {row_index} fid={fid} {column_name} segment #{idx} is empty")
+            raise RowParseError(f"Row {row_index} fid= {fid} {column_name} segment #{idx} is empty")
         extracted = _parse_segment(segment, patterns)
         if extracted is None:
             snippet = segment.replace("\n", "\\n")
             if len(snippet) > 120:
                 snippet = snippet[:117] + "..."
             raise RowParseError(
-                f"Row {row_index} fid={fid} {column_name} segment #{idx} format invalid: {snippet}"
+                f"Row {row_index} fid= {fid} {column_name} segment #{idx} format invalid: {snippet}"
             )
         structure_error = _validate_segment_text_structure(extracted[1])
         if structure_error is not None:
             snippet = extracted[1].replace("\n", "\\n")
             if len(snippet) > 120:
                 snippet = snippet[:117] + "..."
-            raise RowParseError(
-                f"Row {row_index} fid={fid} {column_name} segment #{idx} content invalid: "
+            print(
+                f"[WARN] Row {row_index} fid= {fid} {column_name} segment #{idx} content invalid: "
                 f"{structure_error}: {snippet}"
             )
         parsed.append(extracted)
@@ -449,7 +464,7 @@ def _collect_merged_fid_rows(
             if split_part_value in part_map:
                 existing_row = part_map[split_part_value][0]
                 raise RowParseError(
-                    f"Row {row_index} duplicate splitPart for fid={fid_text}: {split_part_value} "
+                    f"Row {row_index} duplicate splitPart for fid= {fid_text}: {split_part_value} "
                     f"(already seen at row {existing_row})"
                 )
             part_map[split_part_value] = (row_index, source_raw, translated_raw)
@@ -500,10 +515,20 @@ def _build_output_rows_for_excel_row(
             "translatedText",
         )
 
-    if len(source_segments) != len(translated_segments):
-        raise RowParseError(
-            f"Row {row_index} fid={fid} segment count mismatch: "
-            f"source={len(source_segments)}, translated={len(translated_segments)}"
+    source_text_ids = [text_id for text_id, _ in source_segments]
+    translated_text_ids = [text_id for text_id, _ in translated_segments]
+    if source_text_ids != translated_text_ids:
+        original_translated_count = len(translated_segments)
+        translated_segments, copied_count, dropped_count = _fill_missing_translated_segments(
+            fid=fid,
+            row_index=row_index,
+            source_segments=source_segments,
+            translated_segments=translated_segments,
+        )
+        print(
+            f"[WARN] Row {row_index} fid= {fid} segment alignment adjusted: "
+            f"source={len(source_segments)}, translated={original_translated_count}, "
+            f"filled_missing={copied_count}, dropped_unmatched={dropped_count}"
         )
 
     rows: List[List[str]] = []
@@ -512,7 +537,7 @@ def _build_output_rows_for_excel_row(
         translated_text_id, translated_text = translated_item
         if source_text_id != translated_text_id:
             raise RowParseError(
-                f"Row {row_index} fid={fid} segment #{idx} textId mismatch: "
+                f"Row {row_index} fid= {fid} segment #{idx} textId mismatch: "
                 f"source={source_text_id}, translated={translated_text_id}"
             )
         source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
@@ -539,6 +564,85 @@ def _build_output_rows_for_excel_row(
             ]
         )
     return rows
+
+
+def _fill_missing_translated_segments(
+    fid: str,
+    row_index: int,
+    source_segments: List[Tuple[str, str]],
+    translated_segments: List[Tuple[str, str]],
+) -> Tuple[List[Tuple[str, str]], int, int]:
+    # 当译文与原文数量不一致时，以原文 textId 顺序为准重建译文。
+    # 规则：
+    # 1) 当前 translated textId 与 source textId 相同 → 保留译文
+    # 2) source 缺失 → 复制 source 文本补齐
+    # 3) translated 多出且不属于剩余 source → 丢弃并告警
+    # 这样能处理“缺段 + 多段 + 局部错位”的组合脏数据，但不影响原文主顺序。
+    aligned_translated: List[Tuple[str, str]] = []
+    translated_index = 0
+    copied_count = 0
+    dropped_count = 0
+    copied_ids: List[str] = []
+    dropped_ids: List[str] = []
+
+    remaining_source_ids = {text_id for text_id, _ in source_segments}
+
+    for source_text_id, source_text in source_segments:
+        remaining_source_ids.discard(source_text_id)
+        while translated_index < len(translated_segments):
+            translated_text_id, translated_text = translated_segments[translated_index]
+            if translated_text_id == source_text_id:
+                aligned_translated.append((translated_text_id, translated_text))
+                translated_index += 1
+                break
+            if translated_text_id not in remaining_source_ids:
+                dropped_count += 1
+                if len(dropped_ids) < 5:
+                    dropped_ids.append(translated_text_id)
+                translated_index += 1
+                continue
+
+            aligned_translated.append((source_text_id, source_text))
+            copied_count += 1
+            if len(copied_ids) < 5:
+                copied_ids.append(source_text_id)
+            break
+        else:
+            aligned_translated.append((source_text_id, source_text))
+            copied_count += 1
+            if len(copied_ids) < 5:
+                copied_ids.append(source_text_id)
+
+        if len(aligned_translated) < len(source_segments) and aligned_translated[-1][0] != source_text_id:
+            raise RowParseError(
+                f"Row {row_index} fid= {fid} translated alignment internal error at textId={source_text_id}"
+            )
+
+    while translated_index < len(translated_segments):
+        dropped_count += 1
+        translated_text_id = translated_segments[translated_index][0]
+        if len(dropped_ids) < 5:
+            dropped_ids.append(translated_text_id)
+        translated_index += 1
+
+    if copied_count == 0 and dropped_count == 0:
+        raise RowParseError(
+            f"Row {row_index} fid= {fid} segment count mismatch cannot be repaired"
+        )
+
+    message = (
+        f"[WARN] Row {row_index} fid= {fid} copied source text into translated for "
+        f"{copied_count} missing segment(s): {', '.join(copied_ids)}"
+        + (" ..." if copied_count > len(copied_ids) else "")
+    )
+    if dropped_count > 0:
+        message += (
+            f"; dropped {dropped_count} unmatched translated segment(s): "
+            f"{', '.join(dropped_ids)}"
+            + (" ..." if dropped_count > len(dropped_ids) else "")
+        )
+    print(message)
+    return aligned_translated, copied_count, dropped_count
 
 
 def _write_insert(handle, table: str, output_columns: Dict[str, str], rows: List[List[str]]) -> None:

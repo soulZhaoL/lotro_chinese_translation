@@ -1,0 +1,25 @@
+base_dir: "__PROJECT_ROOT__"
+
+input:
+  path: "work_text/text_work_U461_online_fixed.xlsx"
+  sheet: "sheet1"
+  row_start: 2
+  row_end: "max"
+  column: "C"
+
+parsing:
+  splitDelimiter: "|||"
+  idPattern: "\\d{2,10}"
+
+repair:
+  allowMissingColonInColon6Format: true
+  allowMissingOpeningBracket: true
+  allowMissingClosingBracket: true
+
+output:
+  path: "work_text/text_work_U461_online_fixed_v2.xlsx"
+  overwrite: true
+
+behavior:
+  skipBlankCells: true
+  maxSamplesPerKind: 5

@@ -39,6 +39,7 @@
 - 文本模板下载接口（/texts/template）、筛选导出接口（/texts/download）与离线翻译上传接口（/texts/upload）
 - 文本上传模板纯逻辑测试（无需数据库）
 - 汉化包下载功能（/texts/download-package）：按 fid 分组合并 part，还原 textId::::::[text] 协议格式，前端新增"下载汉化包"按钮
+- xlsx 协议外层方括号自动修复脚本（仅修复明显缺失的 `[` / `]`）
 
 ### 变更
 - 文本表状态改为数值枚举（1=新增/2=修改/3=已完成），新增认领状态字段 isClaimed

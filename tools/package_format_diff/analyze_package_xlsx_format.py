@@ -561,11 +561,8 @@ def run_analysis(
     sys_headers = _read_header(sys_cfg)
     parse_segment = _make_segment_parser(compare_cfg.text_id_pattern)
 
-    online_iter, online_stats_holder = _aggregate_groups(online_cfg)
-    sys_iter, sys_stats_holder = _aggregate_groups(sys_cfg)
-
-    online_group = next(online_iter, None)
-    sys_group = next(sys_iter, None)
+    online_map, online_stats = _collect_group_map_any_order(online_cfg)
+    sys_map, sys_stats = _collect_group_map_any_order(sys_cfg)
 
     only_online = 0
     only_sys = 0
@@ -576,46 +573,48 @@ def run_analysis(
     structural_diff = 0
     tag_counter: Dict[str, int] = {}
     report_rows: List[List[str]] = []
+    online_keys = set(online_map)
+    sys_keys = set(sys_map)
 
-    while online_group is not None or sys_group is not None:
-        if sys_group is None or (online_group is not None and online_group.fid < sys_group.fid):
-            only_online += 1
-            report_rows.append(
-                [
-                    "only_online",
-                    online_group.fid,
-                    str(online_group.chunk_count),
-                    "",
-                    str(len(online_group.merged_translation)),
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                ]
-            )
-            online_group = next(online_iter, None)
-            continue
+    for fid in sorted(online_keys - sys_keys):
+        only_online += 1
+        online_group = online_map[fid]
+        report_rows.append(
+            [
+                "only_online",
+                online_group.fid,
+                str(online_group.chunk_count),
+                "",
+                str(len(online_group.merged_translation)),
+                "",
+                "",
+                "",
+                "",
+                "",
+            ]
+        )
 
-        if online_group is None or (sys_group is not None and sys_group.fid < online_group.fid):
-            only_sys += 1
-            report_rows.append(
-                [
-                    "only_sys",
-                    sys_group.fid,
-                    "",
-                    str(sys_group.chunk_count),
-                    "",
-                    str(len(sys_group.merged_translation)),
-                    "",
-                    "",
-                    "",
-                    "",
-                ]
-            )
-            sys_group = next(sys_iter, None)
-            continue
+    for fid in sorted(sys_keys - online_keys):
+        only_sys += 1
+        sys_group = sys_map[fid]
+        report_rows.append(
+            [
+                "only_sys",
+                sys_group.fid,
+                "",
+                str(sys_group.chunk_count),
+                "",
+                str(len(sys_group.merged_translation)),
+                "",
+                "",
+                "",
+                "",
+            ]
+        )
 
+    for fid in sorted(online_keys & sys_keys):
+        online_group = online_map[fid]
+        sys_group = sys_map[fid]
         if online_group.chunk_count != sys_group.chunk_count:
             chunk_count_diff += 1
 
@@ -637,40 +636,35 @@ def run_analysis(
                         "聚合后 translation 完全一致，仅分片数量不同",
                     ]
                 )
-        else:
-            translation_diff += 1
-            diff_info = _analyze_translation_diff(
-                online_group.merged_translation,
-                sys_group.merged_translation,
-                compare_cfg.split_delimiter,
-                parse_segment,
-            )
-            tags = _require_type(diff_info["tags"], list, "runtime.tags")
-            if any(tag in {"invalid_segment", "segment_count_diff", "textid_sequence_diff", "trailing_delimiter_diff", "empty_segment_only_diff"} for tag in tags):
-                structural_diff += 1
-            for tag in tags:
-                tag_counter[tag] = tag_counter.get(tag, 0) + 1
+            continue
 
-            report_rows.append(
-                [
-                    "translation_diff",
-                    online_group.fid,
-                    str(online_group.chunk_count),
-                    str(sys_group.chunk_count),
-                    str(len(online_group.merged_translation)),
-                    str(len(sys_group.merged_translation)),
-                    str(diff_info["online_segment_count"]),
-                    str(diff_info["sys_segment_count"]),
-                    "|".join(tags),
-                    str(diff_info["first_diff_context"]),
-                ]
-            )
+        translation_diff += 1
+        diff_info = _analyze_translation_diff(
+            online_group.merged_translation,
+            sys_group.merged_translation,
+            compare_cfg.split_delimiter,
+            parse_segment,
+        )
+        tags = _require_type(diff_info["tags"], list, "runtime.tags")
+        if any(tag in {"invalid_segment", "segment_count_diff", "textid_sequence_diff", "trailing_delimiter_diff", "empty_segment_only_diff"} for tag in tags):
+            structural_diff += 1
+        for tag in tags:
+            tag_counter[tag] = tag_counter.get(tag, 0) + 1
 
-        online_group = next(online_iter, None)
-        sys_group = next(sys_iter, None)
-
-    online_stats = _build_file_stats(online_stats_holder)
-    sys_stats = _build_file_stats(sys_stats_holder)
+        report_rows.append(
+            [
+                "translation_diff",
+                online_group.fid,
+                str(online_group.chunk_count),
+                str(sys_group.chunk_count),
+                str(len(online_group.merged_translation)),
+                str(len(sys_group.merged_translation)),
+                str(diff_info["online_segment_count"]),
+                str(diff_info["sys_segment_count"]),
+                "|".join(tags),
+                str(diff_info["first_diff_context"]),
+            ]
+        )
 
     summary = {
         "online_headers": online_headers,
@@ -707,6 +701,101 @@ def _build_file_stats(stats_holder: Dict[str, object]) -> FileStats:
         max_chunks_fid=_require_type(stats_holder["max_chunks_fid"], str, "runtime.max_chunks_fid"),
         multi_row_examples=tuple(multi_row_examples),
     )
+
+
+def _collect_group_map_any_order(file_cfg: FileConfig) -> Tuple[Dict[str, GroupRecord], FileStats]:
+    fid_order: List[str] = []
+    grouped_rows: Dict[str, object] = {}
+    row_count = 0
+    max_chunk_length = 0
+    max_chunk_fid = ""
+    max_chunk_row = 0
+
+    for row_number, row in _iter_sheet_rows(file_cfg.path, file_cfg.sheet):
+        if row_number == 1:
+            continue
+
+        fid = _normalize_fid(row.get(file_cfg.fid_column), row_number, file_cfg.label)
+        translation = _normalize_text(row.get(file_cfg.translation_column))
+        row_count += 1
+
+        if len(translation) > max_chunk_length:
+            max_chunk_length = len(translation)
+            max_chunk_fid = fid
+            max_chunk_row = row_number
+
+        if fid not in grouped_rows:
+            fid_order.append(fid)
+            if file_cfg.order_mode == "split_part":
+                grouped_rows[fid] = {}
+            else:
+                grouped_rows[fid] = []
+
+        if file_cfg.order_mode == "split_part":
+            if file_cfg.split_part_column is None:
+                raise WorkbookFormatError(f"{file_cfg.label} 缺少 splitPart 配置")
+            split_part = _parse_split_part(row.get(file_cfg.split_part_column), row_number, file_cfg.label)
+            part_map = _require_type(grouped_rows[fid], dict, "runtime.grouped_rows")
+            if split_part in part_map:
+                existing_row = part_map[split_part][0]
+                raise WorkbookFormatError(
+                    f"{file_cfg.label} fid={fid} 出现重复 split_part={split_part} "
+                    f"(row {existing_row} / row {row_number})"
+                )
+            part_map[split_part] = (row_number, translation)
+        else:
+            items = _require_type(grouped_rows[fid], list, "runtime.grouped_rows")
+            items.append((row_number, translation))
+
+    grouped: Dict[str, GroupRecord] = {}
+    multi_row_fid_count = 0
+    max_chunks_per_fid = 0
+    max_chunks_fid = ""
+    multi_row_examples: List[Tuple[str, int]] = []
+
+    for fid in fid_order:
+        if file_cfg.order_mode == "split_part":
+            part_map = _require_type(grouped_rows[fid], dict, "runtime.part_map")
+            ordered_parts = sorted(part_map)
+            row_numbers = tuple(part_map[part][0] for part in ordered_parts)
+            split_parts = tuple(ordered_parts)
+            chunk_texts = [part_map[part][1] for part in ordered_parts]
+        else:
+            items = _require_type(grouped_rows[fid], list, "runtime.items")
+            row_numbers = tuple(item[0] for item in items)
+            split_parts = tuple(None for _ in items)
+            chunk_texts = [item[1] for item in items]
+
+        record = GroupRecord(
+            fid=fid,
+            chunk_count=len(chunk_texts),
+            merged_translation="".join(chunk_texts),
+            row_numbers=row_numbers,
+            split_parts=split_parts,
+            chunk_lengths=tuple(len(text) for text in chunk_texts),
+        )
+        grouped[fid] = record
+
+        if record.chunk_count > 1:
+            multi_row_fid_count += 1
+            if len(multi_row_examples) < 10:
+                multi_row_examples.append((record.fid, record.chunk_count))
+        if record.chunk_count > max_chunks_per_fid:
+            max_chunks_per_fid = record.chunk_count
+            max_chunks_fid = record.fid
+
+    stats = FileStats(
+        row_count=row_count,
+        fid_count=len(grouped),
+        multi_row_fid_count=multi_row_fid_count,
+        max_chunk_length=max_chunk_length,
+        max_chunk_fid=max_chunk_fid,
+        max_chunk_row=max_chunk_row,
+        max_chunks_per_fid=max_chunks_per_fid,
+        max_chunks_fid=max_chunks_fid,
+        multi_row_examples=tuple(multi_row_examples),
+    )
+    return grouped, stats
 
 
 def _write_report(path: Path, rows: List[List[str]]) -> None:
