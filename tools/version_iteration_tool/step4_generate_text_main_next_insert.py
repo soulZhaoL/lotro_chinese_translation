@@ -106,6 +106,8 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     if chunk_size <= 0:
         raise ConfigError("output.chunkSize 必须大于 0")
+    if split_delimiter == "":
+        raise ConfigError("parsing.splitDelimiter 不能为空")
     if status_value not in (1, 2, 3):
         raise ConfigError("fixedValues.status 必须为 1/2/3")
     if edit_count < 0:
@@ -229,7 +231,17 @@ def _parse_segment(
         or pattern_triple_colon_range.fullmatch(segment)
     )
     if matched is None:
-        return None
+        open_count = segment.count("[")
+        close_count = segment.count("]")
+        if open_count > close_count:
+            repaired = segment + ("]" * (open_count - close_count))
+            matched = (
+                pattern_colon6.fullmatch(repaired)
+                or pattern_triple_colon_num.fullmatch(repaired)
+                or pattern_triple_colon_range.fullmatch(repaired)
+            )
+        if matched is None:
+            return None
     text = matched.group("sourceText")
     open_count = text.count("[")
     close_count = text.count("]")
@@ -352,12 +364,10 @@ def main() -> None:
                     text_id, source_text = parsed
                     structure_error = _validate_segment_text_structure(source_text)
                     if structure_error is not None:
-                        if config["invalidSegmentPolicy"] == "skip":
-                            continue
                         preview = source_text[:200].replace("\n", "\\n")
-                        raise RuntimeError(
-                            f"分段内容结构非法: fid={fid_value}, segmentIndex={segment_index}, "
-                            f"error={structure_error}, segment={preview}"
+                        print(
+                            f"[WARN] 分段内容结构非法但继续保留: fid={fid_value}, "
+                            f"segmentIndex={segment_index}, error={structure_error}, segment={preview}"
                         )
                     source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
 

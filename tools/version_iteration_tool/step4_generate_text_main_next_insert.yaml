@@ -1,7 +1,7 @@
 env: test
 
 input:
-  sqlitePath: work_text/Texts_471.db
+  sqlitePath: work_text/Texts_472.db
   sourceTable: patch_data   # DB 内的表明
   fidColumn: fid            # DB 中的 fid 列名
   textDataColumn: text_data # DB 中的 text_data 列名
@@ -13,7 +13,7 @@ parsing:
   emptyTextDataPolicy: skip
 
 output:
-  sqlPath: work_text/tmp_text_main_next_insert_471.sql
+  sqlPath: work_text/tmp_text_main_next_insert_472.sql
   targetTable: text_main_next
   chunkSize: 20000
   overwrite: true
