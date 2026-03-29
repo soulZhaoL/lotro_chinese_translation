@@ -111,15 +111,15 @@ function KeywordMatchInput({ matchModeField, placeholder, value, onChange }: Key
   const matchMode = Form.useWatch(matchModeField, form) as TextMatchMode | undefined;
 
   return (
-    <>
-      <Form.Item name={matchModeField} initialValue="fuzzy" hidden noStyle>
-        <Input />
-      </Form.Item>
-      <Input
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange?.(event.target.value)}
-        addonAfter={
+    <Input
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange?.(event.target.value)}
+      addonAfter={
+        <>
+          <Form.Item name={matchModeField} initialValue="fuzzy" hidden noStyle>
+            <Input />
+          </Form.Item>
           <Select
             value={matchMode || "fuzzy"}
             options={TEXT_MATCH_MODE_OPTIONS}
@@ -127,9 +127,9 @@ function KeywordMatchInput({ matchModeField, placeholder, value, onChange }: Key
             onChange={(nextValue) => form.setFieldValue(matchModeField, nextValue)}
             style={{ width: 84 }}
           />
-        }
-      />
-    </>
+        </>
+      }
+    />
   );
 }
 
@@ -409,14 +409,7 @@ export function createParentColumns({
       title: "原文筛选",
       dataIndex: "sourceKeyword",
       hideInTable: true,
-      renderFormItem: (_, config) => (
-        <KeywordMatchInput
-          matchModeField="sourceMatchMode"
-          placeholder="请输入原文"
-          value={typeof config.value === "string" ? config.value : undefined}
-          onChange={config.onChange as ((value: string) => void) | undefined}
-        />
-      ),
+      renderFormItem: () => <KeywordMatchInput matchModeField="sourceMatchMode" placeholder="请输入原文" />,
     },
     {
       title: "原文匹配",
@@ -431,14 +424,7 @@ export function createParentColumns({
       title: "译文筛选",
       dataIndex: "translatedKeyword",
       hideInTable: true,
-      renderFormItem: (_, config) => (
-        <KeywordMatchInput
-          matchModeField="translatedMatchMode"
-          placeholder="请输入译文"
-          value={typeof config.value === "string" ? config.value : undefined}
-          onChange={config.onChange as ((value: string) => void) | undefined}
-        />
-      ),
+      renderFormItem: () => <KeywordMatchInput matchModeField="translatedMatchMode" placeholder="请输入译文" />,
     },
     {
       title: "译文匹配",
