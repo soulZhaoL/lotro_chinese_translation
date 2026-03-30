@@ -82,6 +82,7 @@ export interface ChangeItem {
   id: number;
   textId: number;
   userId: number;
+  username: string | null;
   beforeText: string;
   afterText: string;
   reason: string | null;

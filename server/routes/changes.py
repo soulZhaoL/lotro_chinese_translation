@@ -23,15 +23,17 @@ def list_changes(id: int = Query(...), user: Dict[str, Any] = Depends(require_au
         cursor.execute(
             """
             SELECT
-              id,
-              "textId" AS "textId",
-              "userId" AS "userId",
-              "beforeText" AS "beforeText",
-              "afterText" AS "afterText",
-              reason,
-              "changedAt" AS "changedAt"
-            FROM text_changes
-            WHERE "textId" = %s
+              c.id,
+              c."textId" AS "textId",
+              c."userId" AS "userId",
+              u.username AS username,
+              c."beforeText" AS "beforeText",
+              c."afterText" AS "afterText",
+              c.reason,
+              c."changedAt" AS "changedAt"
+            FROM text_changes c
+            LEFT JOIN users u ON u.id = c."userId"
+            WHERE c."textId" = %s
             ORDER BY "changedAt" DESC
             """,
             (id,),

@@ -68,7 +68,8 @@
 ### 修复
 - 数据模型文档补齐 text_locks.releasedAt 字段
 - 文本列表“导出”按钮补齐与“下载汉化包”一致的加载与进度文案交互，避免下载过程中无反馈
-- - `server/hash_password.py` 支持以 `python server/hash_password.py ...` 方式直接执行，避免包导入失败
+- `server/hash_password.py` 支持以 `python server/hash_password.py ...` 方式直接执行，避免包导入失败
+- 更新记录页“用户”列改为展示 `username`，用户不存在时回退显示 `userId`
 
 ## [0.1.0] - 2026-01-30
 

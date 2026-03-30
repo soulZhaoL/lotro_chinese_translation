@@ -37,7 +37,7 @@ export default function TextChanges() {
 
   const columns: ColumnsType<ChangeItem> = [
     { title: "时间", dataIndex: "changedAt", render: (val) => formatDateTime(val) },
-    { title: "用户", dataIndex: "userId" },
+    { title: "用户", dataIndex: "username", render: (_, record) => record.username || String(record.userId) },
     { title: "原因", dataIndex: "reason" },
   ];
 
