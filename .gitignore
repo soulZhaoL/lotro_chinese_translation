@@ -224,3 +224,6 @@ tmp/*
 
 .playwright-test/
 .playwright-cli/
+
+# idea 
+.idea/
