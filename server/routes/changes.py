@@ -2,6 +2,7 @@
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
 
 from ..db import db_cursor
 from ..response import success_response
@@ -11,8 +12,9 @@ router = APIRouter(prefix="/changes", tags=["changes"])
 
 
 @router.get("")
-def list_changes(id: int = Query(...), _: Dict[str, Any] = Depends(require_auth)):
+def list_changes(id: int = Query(...), user: Dict[str, Any] = Depends(require_auth)):
     """查询指定文本的变更历史。"""
+    logger.info("Changes list: textId={} userId={}", id, user["userId"])
     with db_cursor() as cursor:
         cursor.execute("SELECT id FROM text_main WHERE id = %s", (id,))
         if cursor.fetchone() is None:
@@ -36,4 +38,5 @@ def list_changes(id: int = Query(...), _: Dict[str, Any] = Depends(require_auth)
         )
         items = cursor.fetchall()
 
+    logger.info("Changes list complete: textId={} count={} userId={}", id, len(items), user["userId"])
     return success_response({"items": items})

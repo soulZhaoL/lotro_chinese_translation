@@ -76,6 +76,13 @@ function filterByDateRange(items: TextItem[], from?: string, to?: string): TextI
   return result;
 }
 
+function matchesText(text: string, keyword: string, matchMode?: string): boolean {
+  if (matchMode === "exact") {
+    return text === keyword;
+  }
+  return text.includes(keyword);
+}
+
 export function generateTexts(query: Query): TextItem[] {
   const total = 200;
   let items = Array.from({ length: total }, (_, i) => createTextItem(i + 1, "texts"));
@@ -91,10 +98,12 @@ export function generateTexts(query: Query): TextItem[] {
     }
   }
   if (query.sourceKeyword) {
-    items = items.filter((item) => item.sourceText.includes(query.sourceKeyword!));
+    items = items.filter((item) => matchesText(item.sourceText, query.sourceKeyword!, query.sourceMatchMode));
   }
   if (query.translatedKeyword) {
-    items = items.filter((item) => (item.translatedText || "").includes(query.translatedKeyword!));
+    items = items.filter((item) =>
+      matchesText(item.translatedText || "", query.translatedKeyword!, query.translatedMatchMode)
+    );
   }
   if (query.claimer) items = items.filter((item) => (item.claimedBy || "").includes(query.claimer!));
   if (query.claimed === "true") items = items.filter((item) => item.isClaimed);

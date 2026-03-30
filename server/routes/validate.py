@@ -3,6 +3,7 @@ import re
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from pydantic import BaseModel
 
 from ..db import db_cursor
@@ -30,8 +31,9 @@ def _extract_percent_tokens(text: str) -> List[str]:
 
 
 @router.post("")
-def validate_text(request: ValidateRequest, _: Dict[str, Any] = Depends(require_auth)):
+def validate_text(request: ValidateRequest, user: Dict[str, Any] = Depends(require_auth)):
     """校验译文格式并返回错误列表。"""
+    logger.info("Validate start: textId={} translatedLength={} userId={}", request.id, len(request.translatedText), user["userId"])
     with db_cursor() as cursor:
         cursor.execute('SELECT "sourceText" FROM text_main WHERE id = %s', (request.id,))
         row = cursor.fetchone()
@@ -54,6 +56,7 @@ def validate_text(request: ValidateRequest, _: Dict[str, Any] = Depends(require_
     if len(source_percents) != len(translated_percents):
         errors.append("百分号占位符数量不一致")
 
+    logger.info("Validate complete: textId={} valid={} errorCount={} userId={}", request.id, len(errors) == 0, len(errors), user["userId"])
     return success_response(
         {
             "valid": len(errors) == 0,

@@ -15,6 +15,7 @@ _REQUIRED_TOP_LEVEL_KEYS = (
     "locks",
     "cors",
     "http",
+    "logging",
     "text_list",
     "maintenance",
     "text_import_export",
@@ -111,6 +112,7 @@ def load_config() -> Dict[str, Any]:
     locks = _require_type(_require_key(data, "locks", ""), dict, "locks")
     cors = _require_type(_require_key(data, "cors", ""), dict, "cors")
     http = _require_type(_require_key(data, "http", ""), dict, "http")
+    logging_config = _require_type(_require_key(data, "logging", ""), dict, "logging")
     text_list = _require_type(_require_key(data, "text_list", ""), dict, "text_list")
     maintenance = _require_type(_require_key(data, "maintenance", ""), dict, "maintenance")
     text_import_export = _require_type(_require_key(data, "text_import_export", ""), dict, "text_import_export")
@@ -133,6 +135,13 @@ def load_config() -> Dict[str, Any]:
     _require_type(_require_key(cors, "allow_credentials", "cors."), bool, "cors.allow_credentials")
     _require_type(_require_key(cors, "max_age", "cors."), int, "cors.max_age")
     _require_type(_require_key(http, "gzip_minimum_size", "http."), int, "http.gzip_minimum_size")
+    _require_type(
+        _require_key(logging_config, "request_max_body_length", "logging."),
+        int,
+        "logging.request_max_body_length",
+    )
+    _require_type(_require_key(logging_config, "redact_fields", "logging."), list, "logging.redact_fields")
+    _require_type(_require_key(logging_config, "log_body_methods", "logging."), list, "logging.log_body_methods")
     _require_type(_require_key(text_list, "max_text_length", "text_list."), int, "text_list.max_text_length")
     _require_type(
         _require_key(text_import_export, "max_upload_rows", "text_import_export."),
@@ -169,6 +178,16 @@ def load_config() -> Dict[str, Any]:
         raise ConfigError("配置项无效: text_import_export.download_progress_log_every_batches 必须 > 0")
     if not text_import_export["download_temp_dir"].strip():
         raise ConfigError("配置项无效: text_import_export.download_temp_dir 不能为空")
+    if logging_config["request_max_body_length"] <= 0:
+        raise ConfigError("配置项无效: logging.request_max_body_length 必须 > 0")
+    for idx, item in enumerate(logging_config["redact_fields"]):
+        _require_type(item, str, f"logging.redact_fields[{idx}]")
+        if not item.strip():
+            raise ConfigError(f"配置项无效: logging.redact_fields[{idx}] 不能为空")
+    for idx, item in enumerate(logging_config["log_body_methods"]):
+        _require_type(item, str, f"logging.log_body_methods[{idx}]")
+        if not item.strip():
+            raise ConfigError(f"配置项无效: logging.log_body_methods[{idx}] 不能为空")
 
     maintenance_enabled = _parse_bool(_require_key(maintenance, "enabled", "maintenance."), "maintenance.enabled")
     maintenance_message = _require_type(_require_key(maintenance, "message", "maintenance."), str, "maintenance.message")

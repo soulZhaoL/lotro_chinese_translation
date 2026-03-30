@@ -37,6 +37,21 @@ cors:
 http:
   gzip_minimum_size: 1024
 
+logging:
+  request_max_body_length: 2048
+  redact_fields:
+    - "authorization"
+    - "cookie"
+    - "password"
+    - "passwordHash"
+    - "passwordSalt"
+    - "token"
+  log_body_methods:
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+
 text_list:
   max_text_length: 5000
 

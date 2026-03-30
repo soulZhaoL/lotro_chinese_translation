@@ -43,9 +43,20 @@ def list_dictionary(
     isActive: Optional[bool] = None,
     page: int = 1,
     pageSize: Optional[int] = Query(default=None, alias="pageSize"),
-    _: Dict[str, Any] = Depends(require_auth),
+    user: Dict[str, Any] = Depends(require_auth),
 ):
     """查询词典条目，支持筛选与分页。"""
+    logger.info(
+        "Dict list: keyword={} termKey={} termValue={} category={} isActive={} page={} pageSize={} userId={}",
+        keyword,
+        termKey,
+        termValue,
+        category,
+        isActive,
+        page,
+        pageSize,
+        user["userId"],
+    )
     config = get_config()
     pagination = config["pagination"]
     default_page_size = pagination["default_page_size"]
@@ -104,6 +115,7 @@ def list_dictionary(
         )
         items = cursor.fetchall()
 
+    logger.info("Dict list complete: total={} page={} pageSize={} userId={}", total, page, effective_page_size, user["userId"])
     return success_response(
         {
             "items": items,
@@ -115,9 +127,9 @@ def list_dictionary(
 
 
 @router.post("")
-def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depends(require_auth)):
+def create_dictionary(request: DictionaryCreateRequest, user: Dict[str, Any] = Depends(require_auth)):
     """新增词典条目。"""
-    logger.info(f"Dict create: termKey={request.termKey} category={request.category}")
+    logger.info(f"Dict create: termKey={request.termKey} category={request.category} userId={user['userId']}")
     with db_cursor() as cursor:
         cursor.execute(
             """
@@ -128,14 +140,16 @@ def create_dictionary(request: DictionaryCreateRequest, _: Dict[str, Any] = Depe
         )
         entry_id = cursor.lastrowid
 
-    logger.info(f"Dict created: entryId={entry_id} termKey={request.termKey}")
+    logger.info(f"Dict created: entryId={entry_id} termKey={request.termKey} userId={user['userId']}")
     return success_response({"id": entry_id})
 
 
 @router.put("/{entryId}")
-def update_dictionary(entryId: int, request: DictionaryUpdateRequest, _: Dict[str, Any] = Depends(require_auth)):
+def update_dictionary(entryId: int, request: DictionaryUpdateRequest, user: Dict[str, Any] = Depends(require_auth)):
     """更新词典条目。"""
-    logger.info(f"Dict update: entryId={entryId} termKey={request.termKey} isActive={request.isActive}")
+    logger.info(
+        f"Dict update: entryId={entryId} termKey={request.termKey} isActive={request.isActive} userId={user['userId']}"
+    )
     with db_cursor() as cursor:
         cursor.execute("SELECT id FROM dictionary_entries WHERE id = %s", (entryId,))
         if cursor.fetchone() is None:
@@ -150,4 +164,5 @@ def update_dictionary(entryId: int, request: DictionaryUpdateRequest, _: Dict[st
             (request.termKey, request.termValue, request.category, request.isActive, entryId),
         )
 
+    logger.info(f"Dict updated: entryId={entryId} userId={user['userId']}")
     return success_response({"id": entryId})

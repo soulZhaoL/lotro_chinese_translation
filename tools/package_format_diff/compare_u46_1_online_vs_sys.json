@@ -1,0 +1,30 @@
+{
+  "base_dir": "__PROJECT_ROOT__",
+  "files": {
+    "online": {
+      "path": "work_text/text_work_U461_online.xlsx",
+      "sheet": "sheet1",
+      "fidColumn": "A",
+      "translationColumn": "C",
+      "splitPartColumn": "B",
+      "orderMode": "split_part"
+    },
+    "sys": {
+      "path": "work_text/text_work U46_1_sys.xlsx",
+      "sheet": "texts",
+      "fidColumn": "A",
+      "translationColumn": "B",
+      "splitPartColumn": null,
+      "orderMode": "document"
+    }
+  },
+  "comparison": {
+    "splitDelimiter": "|||",
+    "textIdPattern": "\\d{2,10}"
+  },
+  "output": {
+    "summaryPath": "tmp/tmp_package_format_diff_summary.md",
+    "reportPath": "tmp/tmp_package_format_diff_report.csv",
+    "mismatchExampleLimit": 200
+  }
+}

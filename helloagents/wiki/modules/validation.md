@@ -38,6 +38,7 @@
 - 已实现最小校验规则：空文本、花括号占位符数量、%s/%d 占位符数量
 - 新增离线脚本 `tools/valid_format/xlsx_format_check.py`，用于统计固定格式数量并支持 C/D 列对比（固定格式前缀为 6-10 位数字；支持输出不一致行的附近片段、xlsx 报告与进度输出）
 - 新增离线脚本 `tools/valid_format/xlsx_token_check.py`，用于统计 `<--DO_NOT_TOUCH!-->` 标记数量并导出不一致行的 xlsx 报告
+- 新增离线脚本 `tools/fix_textid/generate_translation_fix_sql_from_xlsx.py`，用于参照分段协议规则解析 `sheet1`，将异常样本中的 `fid + textId` 与新版 xlsx 对齐，输出“可自动修复 SQL”与“异常明细 CSV”两类结果；脚本只为可确定无误的记录生成 SQL，结构异常/错位/未命中项会单独落盘供人工确认
 
 ## 变更历史
 - 2026-02-11：校验接口输入字段统一为 camelCase

@@ -94,4 +94,5 @@ def release_lock(lockId: int, user: Dict[str, Any] = Depends(require_auth)):
             (now, lockId),
         )
 
+    logger.info(f"Lock released: lockId={lockId} userId={user['userId']} releasedAt={now}")
     return success_response({"releasedAt": now})

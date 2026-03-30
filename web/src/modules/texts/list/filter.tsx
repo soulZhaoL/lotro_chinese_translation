@@ -50,6 +50,16 @@ function normalizeDateTime(value: unknown): string | undefined {
   return value ? value : undefined;
 }
 
+function normalizeMatchMode(value: unknown): QueryParams["sourceMatchMode"] | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  if (value === "fuzzy" || value === "exact") {
+    return value;
+  }
+  return undefined;
+}
+
 function normalizeRange(range: unknown): { updatedFrom?: string; updatedTo?: string } {
   if (!Array.isArray(range)) {
     return {};
@@ -62,12 +72,16 @@ function normalizeRange(range: unknown): { updatedFrom?: string; updatedTo?: str
 
 export function normalizeQueryParams(raw: Partial<QueryParams> & { uptTime?: [string, string] }): QueryParams {
   const range = normalizeRange(raw.uptTime);
+  const sourceKeyword = normalizeString(raw.sourceKeyword);
+  const translatedKeyword = normalizeString(raw.translatedKeyword);
   return {
     fid: normalizeString(raw.fid),
     textId: normalizeString(raw.textId),
     status: normalizeStatus(raw.status),
-    sourceKeyword: normalizeString(raw.sourceKeyword),
-    translatedKeyword: normalizeString(raw.translatedKeyword),
+    sourceKeyword,
+    sourceMatchMode: sourceKeyword ? normalizeMatchMode(raw.sourceMatchMode) : undefined,
+    translatedKeyword,
+    translatedMatchMode: translatedKeyword ? normalizeMatchMode(raw.translatedMatchMode) : undefined,
     updatedFrom: normalizeDateTime(raw.updatedFrom) || range.updatedFrom,
     updatedTo: normalizeDateTime(raw.updatedTo) || range.updatedTo,
     claimer: normalizeString(raw.claimer),
@@ -93,8 +107,14 @@ export function buildDownloadQuery(params: QueryParams): URLSearchParams {
   if (params.sourceKeyword) {
     query.set("sourceKeyword", params.sourceKeyword);
   }
+  if (params.sourceMatchMode) {
+    query.set("sourceMatchMode", params.sourceMatchMode);
+  }
   if (params.translatedKeyword) {
     query.set("translatedKeyword", params.translatedKeyword);
+  }
+  if (params.translatedMatchMode) {
+    query.set("translatedMatchMode", params.translatedMatchMode);
   }
   if (params.updatedFrom) {
     query.set("updatedFrom", params.updatedFrom);
@@ -160,6 +180,17 @@ type DownloadProgressHandler = (snapshot: DownloadProgressSnapshot) => void;
 type DownloadOptions = {
   onProgress?: DownloadProgressHandler;
 };
+
+export function formatDownloadProgressText(baseLabel: string, snapshot: DownloadProgressSnapshot): string {
+  if (snapshot.stage === "preparing") {
+    return `${baseLabel}生成中...`;
+  }
+  if (snapshot.percent !== null) {
+    return `${baseLabel}传输中 ${snapshot.percent}%`;
+  }
+  const receivedMb = (snapshot.loadedBytes / (1024 * 1024)).toFixed(1);
+  return `${baseLabel}传输中 ${receivedMb}MB`;
+}
 
 function parseContentLength(headerValue: string | null): number | null {
   if (!headerValue) {
@@ -291,9 +322,9 @@ export async function downloadTemplateFile(): Promise<DownloadFileResult> {
   return downloadByPath("/texts/template", "text_template.xlsx");
 }
 
-export async function downloadFilteredFile(search: QueryParams): Promise<DownloadFileResult> {
+export async function downloadFilteredFile(search: QueryParams, options?: DownloadOptions): Promise<DownloadFileResult> {
   const query = buildDownloadQuery(search);
-  return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx");
+  return downloadByPath(`/texts/download?${query.toString()}`, "text_export.xlsx", options);
 }
 
 export async function downloadPackageFile(search: QueryParams, options?: DownloadOptions): Promise<DownloadFileResult> {
@@ -304,6 +335,8 @@ export async function downloadPackageFile(search: QueryParams, options?: Downloa
 type SearchActionBarProps = {
   dom: ReactNode[];
   uploading: boolean;
+  downloadingFiltered: boolean;
+  filteredDownloadText: string;
   downloadingPackage: boolean;
   packageDownloadText: string;
   onDownloadFiltered: () => void;
@@ -315,6 +348,8 @@ type SearchActionBarProps = {
 export function SearchActionBar({
   dom,
   uploading,
+  downloadingFiltered,
+  filteredDownloadText,
   downloadingPackage,
   packageDownloadText,
   onDownloadFiltered,
@@ -336,7 +371,9 @@ export function SearchActionBar({
         {dom}
       </Space>
       <Space wrap size={8}>
-        <Button onClick={onDownloadFiltered}>导出</Button>
+        <Button loading={downloadingFiltered} onClick={onDownloadFiltered}>
+          {filteredDownloadText}
+        </Button>
         <Button loading={downloadingPackage} onClick={onDownloadPackage}>
           {packageDownloadText}
         </Button>

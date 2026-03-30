@@ -1,16 +1,24 @@
 import type { ProColumns } from "@ant-design/pro-components";
-import { Button, Popconfirm, Popover, Space, Tag, Typography, message } from "antd";
+import { Button, Form, Input, Popconfirm, Popover, Select, Space, Tag, Typography, message } from "antd";
 
 import { apiFetch, getErrorMessage } from "../../../api";
 import { formatDateTime } from "../../../utils/datetime";
 import { TEXT_STATUS_META, TEXT_STATUS_VALUE_ENUM } from "../constants";
-import type { ActiveConfirmState, TextItem } from "../types";
+import type { ActiveConfirmState, TextItem, TextMatchMode } from "../types";
 
 const DISPLAY_LIMIT = 200;
 const TOOLTIP_LIMIT = 5000;
 const MIN_ACTION_DELAY_MS = 300;
 const ACTION_COLUMN_WIDTH = 220;
 const POPOVER_MAX_WIDTH = "min(620px, calc(100vw - 48px))";
+const TEXT_MATCH_MODE_VALUE_ENUM: Record<TextMatchMode, { text: string }> = {
+  fuzzy: { text: "模糊" },
+  exact: { text: "精确" },
+};
+const TEXT_MATCH_MODE_OPTIONS = Object.entries(TEXT_MATCH_MODE_VALUE_ENUM).map(([value, meta]) => ({
+  value: value as TextMatchMode,
+  label: meta.text,
+}));
 
 async function ensureMinDelay(startAt: number, minMs: number) {
   const elapsed = Date.now() - startAt;
@@ -86,6 +94,34 @@ function renderLongText(value?: string | null, highlightKeyword?: string) {
         {renderHighlightedText(displayText, highlightKeyword)}
       </Typography.Text>
     </Popover>
+  );
+}
+
+type KeywordMatchFieldName = "sourceMatchMode" | "translatedMatchMode";
+
+type KeywordMatchInputProps = {
+  matchModeField: KeywordMatchFieldName;
+  placeholder: string;
+  value?: string;
+  onChange?: (value: string) => void;
+};
+
+function KeywordMatchInput({ matchModeField, placeholder, value, onChange }: KeywordMatchInputProps) {
+  return (
+    <Input
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange?.(event.target.value)}
+      addonAfter={
+        <Form.Item name={matchModeField} initialValue="fuzzy" noStyle>
+          <Select
+            options={TEXT_MATCH_MODE_OPTIONS}
+            popupMatchSelectWidth={false}
+            style={{ width: 84 }}
+          />
+        </Form.Item>
+      }
+    />
   );
 }
 
@@ -256,7 +292,9 @@ type CommonActionDeps = {
 
 type ParentColumnsDeps = CommonActionDeps & {
   sourceKeyword?: string;
+  sourceMatchMode?: TextMatchMode;
   translatedKeyword?: string;
+  translatedMatchMode?: TextMatchMode;
   onParentChanged: () => void;
 };
 
@@ -269,7 +307,9 @@ export function createParentColumns({
   setActiveConfirm,
   navigateWithState,
   sourceKeyword,
+  sourceMatchMode,
   translatedKeyword,
+  translatedMatchMode,
   onParentChanged,
 }: ParentColumnsDeps): ProColumns<TextItem>[] {
   return [
@@ -300,14 +340,15 @@ export function createParentColumns({
       dataIndex: "sourceText",
       hideInSearch: true,
       width: 360,
-      render: (_, record) => renderLongText(record.sourceText, sourceKeyword),
+      render: (_, record) => renderLongText(record.sourceText, sourceMatchMode === "fuzzy" ? sourceKeyword : undefined),
     },
     {
       title: "译文",
       dataIndex: "translatedText",
       hideInSearch: true,
       width: 360,
-      render: (_, record) => renderLongText(record.translatedText, translatedKeyword),
+      render: (_, record) =>
+        renderLongText(record.translatedText, translatedMatchMode === "fuzzy" ? translatedKeyword : undefined),
     },
     {
       title: "状态",
@@ -356,8 +397,36 @@ export function createParentColumns({
       hideInTable: true,
       valueEnum: TEXT_STATUS_VALUE_ENUM,
     },
-    { title: "原文关键字", dataIndex: "sourceKeyword", hideInTable: true },
-    { title: "汉化关键字", dataIndex: "translatedKeyword", hideInTable: true },
+    {
+      title: "原文筛选",
+      dataIndex: "sourceKeyword",
+      hideInTable: true,
+      renderFormItem: () => <KeywordMatchInput matchModeField="sourceMatchMode" placeholder="请输入原文" />,
+    },
+    {
+      title: "原文匹配",
+      dataIndex: "sourceMatchMode",
+      valueType: "select",
+      hideInTable: true,
+      hideInSearch: true,
+      initialValue: "fuzzy",
+      valueEnum: TEXT_MATCH_MODE_VALUE_ENUM,
+    },
+    {
+      title: "译文筛选",
+      dataIndex: "translatedKeyword",
+      hideInTable: true,
+      renderFormItem: () => <KeywordMatchInput matchModeField="translatedMatchMode" placeholder="请输入译文" />,
+    },
+    {
+      title: "译文匹配",
+      dataIndex: "translatedMatchMode",
+      valueType: "select",
+      hideInTable: true,
+      hideInSearch: true,
+      initialValue: "fuzzy",
+      valueEnum: TEXT_MATCH_MODE_VALUE_ENUM,
+    },
     {
       title: "更新时间范围",
       dataIndex: "uptTime",

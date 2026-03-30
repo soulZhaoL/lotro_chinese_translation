@@ -1,0 +1,28 @@
+base_dir: "__PROJECT_ROOT__"
+
+files:
+  left:
+    path: "work_text/compare/U46.1_修复.xlsx"
+    sheet: "Sheet1"
+    header_row: 1
+    data_start_row: 2
+    key_column: "fid"
+    compare_column: "translation"
+    order:
+      mode: "column"
+      column: "split_part"
+      value_type: "int"
+      require_unique: false
+  right:
+    path: "work_text/compare/text_work.xlsx"
+    sheet: "texts"
+    header_row: 1
+    data_start_row: 2
+    key_column: "fid"
+    compare_column: "translation"
+    order:
+      mode: "document"
+
+output:
+  report_path: "work_text/compare/tmp_compare_translation_by_fid_report.csv"
+  summary_path: "work_text/compare/tmp_compare_translation_by_fid_summary.txt"

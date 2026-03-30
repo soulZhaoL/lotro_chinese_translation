@@ -112,6 +112,12 @@ LOTRO_PID_PATH=/abs/path/to/uvicorn.pid
 LOTRO_LOG_PATH=/abs/path/to/uvicorn.log
 ```
 
+日志说明：
+
+- `LOTRO_LOG_PATH` 是守护脚本启动后最应该 `tail -f` 的主日志文件，包含 `uvicorn` 输出以及应用写到标准输出的日志。
+- 应用内部还会额外写一份结构化日志到项目内的 `logs/server.log`。
+- 因此如果使用 `server/service.sh` 启动，优先查看 `LOTRO_LOG_PATH`，不要默认 tail `logs/app.log`。
+
 ## API 文档
 
 FastAPI 自带文档：

@@ -221,3 +221,6 @@ web/node_modules/
 *.xlsx
 
 tmp/*
+
+.playwright-test/
+.playwright-cli/

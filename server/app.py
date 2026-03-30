@@ -10,8 +10,11 @@ from loguru import logger
 
 from .config import get_config
 from .logger import setup_logger
+from .logging_context import reset_log_context, set_log_context, update_log_user
+from .request_logging import create_request_id, extract_request_body, get_client_ip, log_request_end, log_request_start
 from .response import error_response
 from .routes import auth, changes, claims, dictionary, health, locks, texts, validate
+from .routes.deps import try_resolve_auth_user
 from .services.maintenance import build_maintenance_response, get_allow_paths, is_maintenance_enabled, is_path_allowed
 
 
@@ -36,16 +39,33 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def logging_middleware(request: Request, call_next):
-        method = request.method
-        path = request.url.path
-        query = request.url.query
-        log_path = f"{path}?{query}" if query else path
-        logger.info(f"→ {method} {log_path}")
-
+        request_id = create_request_id()
+        client_ip = get_client_ip(request)
+        context_token = set_log_context(request_id, client_ip)
         start = time.monotonic()
-        response = await call_next(request)
+        request.state.request_id = request_id
+
+        authorization = request.headers.get("Authorization")
+        auth_user, auth_error = try_resolve_auth_user(authorization)
+        request.state.auth_user = auth_user
+        update_log_user(auth_user)
+        request_body = await extract_request_body(request)
+        log_request_start(request, request_body, auth_error)
+
+        try:
+            response = await call_next(request)
+        except Exception:
+            elapsed_ms = (time.monotonic() - start) * 1000
+            log_request_end(request, 500, elapsed_ms)
+            raise
+        finally:
+            if "response" not in locals():
+                reset_log_context(context_token)
+
         elapsed_ms = (time.monotonic() - start) * 1000
-        logger.info(f"← {method} {path} {response.status_code} ({elapsed_ms:.0f}ms)")
+        response.headers["X-Request-Id"] = request_id
+        log_request_end(request, response.status_code, elapsed_ms)
+        reset_log_context(context_token)
         return response
 
     @app.middleware("http")
