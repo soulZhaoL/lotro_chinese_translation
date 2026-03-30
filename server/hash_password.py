@@ -3,6 +3,10 @@ import argparse
 import secrets
 import sys
 from getpass import getpass
+from pathlib import Path
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from server.config import ConfigError, get_config
 from server.services.auth import _hash_password, _get_auth_config, AuthError
@@ -51,7 +55,7 @@ def main() -> int:
         print()
         print("SQL 示例(请按实际字段补齐):")
         print(
-            'INSERT INTO users (username, "passwordHash", "passwordSalt", "isGuest", "crtTime", "uptTime")\n'
+            "INSERT INTO users (username, passwordHash, passwordSalt, isGuest, crtTime, uptTime)\n"
             f"VALUES ('{args.username}', '{password_hash}', '{salt_hex}', FALSE, NOW(), NOW());"
         )
 

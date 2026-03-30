@@ -66,6 +66,7 @@
 
 ### 修复
 - 数据模型文档补齐 text_locks.releasedAt 字段
+- `server/hash_password.py` 支持以 `python server/hash_password.py ...` 方式直接执行，避免包导入失败
 
 ## [0.1.0] - 2026-01-30
 
