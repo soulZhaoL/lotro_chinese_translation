@@ -317,12 +317,18 @@ export function createParentColumns({
       title: "编号",
       dataIndex: "id",
       hideInSearch: true,
-      width: 88,
+      width: 96,
       fixed: "left",
       render: (_, record) => (
-        <Button type="link" onClick={() => navigateWithState(`/texts/${record.fid}/${record.textId}`)}>
+        <Typography.Link
+          style={{ userSelect: "text" }}
+          onClick={(event) => {
+            event.preventDefault();
+            navigateWithState(`/texts/${record.fid}/${record.textId}`);
+          }}
+        >
           {record.id}
-        </Button>
+        </Typography.Link>
       ),
     },
     {
@@ -334,7 +340,7 @@ export function createParentColumns({
       render: (_, record) => <Typography.Text copyable={{ text: record.fid }}>{record.fid}</Typography.Text>,
     },
     { title: "TextId", dataIndex: "textId", hideInSearch: true, width: 140 },
-    { title: "Part", dataIndex: "part", hideInSearch: true, width: 90 },
+    { title: "Part", dataIndex: "part", hideInSearch: true, width: 72 },
     {
       title: "原文",
       dataIndex: "sourceText",
