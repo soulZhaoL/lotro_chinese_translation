@@ -64,6 +64,7 @@
 - 时间字段由 `createdAt`/`updatedAt` 统一为 `crtTime`/`uptTime`，并同步初始化索引命名
 - pytest 增加 `--run-db-tests` 开关：默认跳过数据库集成测试，按需启用 SSH 隧道后执行
 - 导出能力升级为大数据安全模式：流式数据库读取 + 分批写入 xlsx + 临时文件回传，降低内存溢出风险
+- 后端结构化日志改为按自然日或 10 MB 先到条件自动分割
 
 ### 修复
 - 数据模型文档补齐 text_locks.releasedAt 字段
