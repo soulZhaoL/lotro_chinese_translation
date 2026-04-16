@@ -126,3 +126,4 @@ case "${CMD}" in
     usage
     ;;
 esac
+# ./server/service.sh restart --env .env

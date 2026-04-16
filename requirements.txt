@@ -4,6 +4,7 @@
 fastapi
 uvicorn
 pymysql
+cryptography
 PyYAML
 pytest
 python-dotenv

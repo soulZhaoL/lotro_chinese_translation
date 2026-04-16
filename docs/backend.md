@@ -152,6 +152,7 @@ pytest tests/tmp_test_locks.py -q
 
 - 报错“缺少环境变量”: 确认 `.env` 已生效且包含 `LOTRO_DATABASE_DSN`/`LOTRO_TOKEN_SECRET`
 - 报错“缺少数据表”: 请先执行迁移脚本
+- 登录时报错“'cryptography' package is required for sha256_password or caching_sha2_password auth methods”: 当前 Python 运行环境缺少 `cryptography`，执行 `pip install -r requirements.txt` 或单独安装 `pip install cryptography` 后重启服务
 
 ## 性能与传输
 - 已启用 GZip 压缩（最小响应大小由 `config/lotro.yaml` 的 `http.gzip_minimum_size` 控制）
