@@ -1,14 +1,15 @@
 import type { ActionType, ProColumns } from "@ant-design/pro-components";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProFormInstance } from "@ant-design/pro-form";
-import { Button, Form, Input, Modal, Popover, Select, Space, Tag, Typography, message } from "antd";
+import { Button, Form, Input, Modal, Popover, Select, Space, Typography, message } from "antd";
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiFetch, getErrorMessage } from "../../api";
+import PrettyTag from "../../components/PrettyTag";
 import { getAppConfig } from "../../config";
 import { formatDateTime } from "../../utils/datetime";
-import { CATEGORY_LABELS, CATEGORY_META, CATEGORY_OPTIONS } from "./constants";
+import { CATEGORY_META, CATEGORY_OPTIONS } from "./constants";
 import {
   SearchActionBar,
   type DownloadProgressSnapshot,
@@ -62,18 +63,7 @@ function renderCategoryTag(category?: string | null) {
   }
 
   const meta = CATEGORY_META[category];
-  return (
-    <Tag
-      color={meta?.color || "default"}
-      style={{
-        borderRadius: 999,
-        paddingInline: 10,
-        fontWeight: 500,
-      }}
-    >
-      {meta?.label || category}
-    </Tag>
-  );
+  return <PrettyTag color={meta?.color}>{meta?.label || category}</PrettyTag>;
 }
 
 export default function Dictionary() {

@@ -1,9 +1,10 @@
 // 文本详情页面。
-import { Descriptions, Input, Row, Col, Tag, Typography, message } from "antd";
+import { Descriptions, Input, Row, Col, Typography, message } from "antd";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { apiFetch, getErrorMessage } from "../../../api";
+import PrettyTag from "../../../components/PrettyTag";
 import { formatDateTime } from "../../../utils/datetime";
 import { TEXT_STATUS_META } from "../constants";
 import type { TextDetailByTextIdResponse } from "../types";
@@ -41,9 +42,9 @@ export default function TextDetail() {
         <Descriptions.Item label="TextId">{detail.text.textId}</Descriptions.Item>
         <Descriptions.Item label="Part">{detail.text.part}</Descriptions.Item>
         <Descriptions.Item label="状态">
-          <Tag color={TEXT_STATUS_META[detail.text.status]?.color || "default"}>
+          <PrettyTag color={TEXT_STATUS_META[detail.text.status]?.color}>
             {TEXT_STATUS_META[detail.text.status]?.label || "-"}
-          </Tag>
+          </PrettyTag>
         </Descriptions.Item>
         <Descriptions.Item label="更新时间">{formatDateTime(detail.text.uptTime)}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{formatDateTime(detail.text.crtTime)}</Descriptions.Item>

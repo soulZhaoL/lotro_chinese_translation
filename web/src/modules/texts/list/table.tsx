@@ -1,7 +1,8 @@
 import type { ProColumns } from "@ant-design/pro-components";
-import { Button, Form, Input, Popconfirm, Popover, Select, Space, Tag, Typography, message } from "antd";
+import { Button, Form, Input, Popconfirm, Popover, Select, Space, Typography, message } from "antd";
 
 import { apiFetch, getErrorMessage } from "../../../api";
+import PrettyTag from "../../../components/PrettyTag";
 import { formatDateTime } from "../../../utils/datetime";
 import { TEXT_STATUS_META, TEXT_STATUS_VALUE_ENUM } from "../constants";
 import type { ActiveConfirmState, TextItem, TextMatchMode } from "../types";
@@ -363,7 +364,7 @@ export function createParentColumns({
       width: 100,
       render: (_, record) => {
         const meta = TEXT_STATUS_META[record.status];
-        return <Tag color={meta?.color || "default"}>{meta?.label || "-"}</Tag>;
+        return <PrettyTag color={meta?.color}>{meta?.label || "-"}</PrettyTag>;
       },
     },
     { title: "编辑次数", dataIndex: "editCount", hideInSearch: true, width: 100 },
