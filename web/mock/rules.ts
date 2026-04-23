@@ -146,7 +146,10 @@ export function generateDictionary(query: Query) {
     termKey: `term_${i}`,
     termValue: `译文_${i}`,
     category: i % 2 === 0 ? "race" : "place",
+    remark: i % 3 === 0 ? `备注_${i}` : null,
     isActive: i % 3 !== 0,
+    lastModifiedBy: 1,
+    lastModifiedByName: i % 4 === 0 ? "tester" : "editor",
     crtTime: toIso(new Date(Date.now() - i * 60000)),
     uptTime: toIso(new Date(Date.now() - i * 30000)),
   }));

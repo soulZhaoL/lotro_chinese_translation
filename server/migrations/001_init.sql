@@ -127,10 +127,15 @@ CREATE TABLE dictionary_entries (
   `termKey` VARCHAR(128) NOT NULL COMMENT '词条Key',
   `termValue` VARCHAR(128) NOT NULL COMMENT '词条Value',
   category VARCHAR(64) COMMENT '分类',
+  remark VARCHAR(255) COMMENT '备注',
   `isActive` BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否启用',
+  `lastModifiedBy` BIGINT COMMENT '最后修改人ID',
   `crtTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `uptTime` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (id),
+  UNIQUE KEY uq_dictionary_term_key (`termKey`),
   KEY idx_dictionary_key (`termKey`),
-  KEY idx_dictionary_value (`termValue`)
+  KEY idx_dictionary_value (`termValue`),
+  KEY idx_dictionary_category (category),
+  KEY idx_dictionary_last_modified_by (`lastModifiedBy`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='词典条目表';

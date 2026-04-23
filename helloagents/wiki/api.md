@@ -191,7 +191,17 @@
 **响应:**
 ```json
 {
-  "items": [{ "id": 1, "termKey": "orc", "termValue": "兽人" }],
+  "items": [
+    {
+      "id": 1,
+      "termKey": "orc",
+      "termValue": "兽人",
+      "category": "race",
+      "remark": "常见敌对种族",
+      "lastModifiedBy": 1,
+      "lastModifiedByName": "tester"
+    }
+  ],
   "total": 1,
   "page": 1,
   "pageSize": 20
@@ -201,6 +211,11 @@
 #### [POST] /dictionary
 **描述:** 新增词条
 
+**请求:**
+```json
+{ "termKey": "orc", "termValue": "兽人", "category": "race", "remark": "常见敌对种族" }
+```
+
 **响应:**
 ```json
 { "id": 1 }
@@ -209,9 +224,35 @@
 #### [PUT] /dictionary/{entryId}
 **描述:** 更新词条
 
+**请求:**
+```json
+{ "termValue": "半兽人", "category": "race", "remark": "已统一术语" }
+```
+
 **响应:**
 ```json
 { "id": 1 }
+```
+
+#### [GET] /dictionary/template
+**描述:** 下载词典上传模板（仅表头）
+
+**响应:** xlsx 文件，表头固定顺序为：
+- `原文 key`、`译文 value`、`分类`、`备注`
+
+#### [GET] /dictionary/download
+**描述:** 根据筛选条件导出词典
+
+**请求参数:** keyword/termKey/termValue/category/isActive
+
+#### [POST] /dictionary/upload
+**描述:** 按模板批量导入词典，`termKey` 已存在时覆盖，不存在时新增
+
+**请求参数:** `fileName`
+
+**响应:**
+```json
+{ "createdCount": 1, "updatedCount": 2 }
 ```
 
 ---

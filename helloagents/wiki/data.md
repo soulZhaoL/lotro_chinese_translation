@@ -114,6 +114,13 @@
 | termKey | varchar | 词条 key（用于原文高亮） |
 | termValue | varchar | 词条 value（用于译文高亮） |
 | category | varchar | 分类 |
+| remark | varchar | 备注 |
 | isActive | boolean | 是否启用 |
+| lastModifiedBy | bigint | 最后修改人（users.id） |
 | crtTime | timestamp | 创建时间 |
 | uptTime | timestamp | 更新时间 |
+
+#### 索引与约束
+- 唯一约束: `termKey`
+- 查询索引: `termKey`、`termValue`、`category`
+- 辅助索引: `lastModifiedBy`

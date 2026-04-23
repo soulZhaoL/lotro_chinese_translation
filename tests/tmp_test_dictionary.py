@@ -1,5 +1,8 @@
 # 词典接口测试。
+from io import BytesIO
+
 from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
 
 from server.app import app
 
@@ -12,14 +15,27 @@ def _login(client: TestClient, seed_user):
     return payload["data"]["token"]
 
 
-def test_dictionary_filter(seed_user):
+def _build_dictionary_xlsx(rows):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "dictionary"
+    sheet.append(["原文 key", "译文 value", "分类", "备注"])
+    for row in rows:
+        sheet.append(row)
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def test_dictionary_filter_and_create_with_remark(seed_user):
     client = TestClient(app)
     token = _login(client, seed_user)
     headers = {"Authorization": f"Bearer {token}"}
 
     create = client.post(
         "/dictionary",
-        json={"termKey": "orc", "termValue": "兽人", "category": "race"},
+        json={"termKey": "orc", "termValue": "兽人", "category": "race", "remark": "怪物称呼"},
         headers=headers,
     )
     assert create.status_code == 200
@@ -29,3 +45,103 @@ def test_dictionary_filter(seed_user):
     data = response.json()["data"]
     assert data["total"] == 1
     assert data["items"][0]["termKey"] == "orc"
+    assert data["items"][0]["remark"] == "怪物称呼"
+    assert data["items"][0]["lastModifiedByName"] == seed_user["username"]
+
+
+def test_dictionary_update(seed_user):
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create = client.post(
+        "/dictionary",
+        json={"termKey": "orc", "termValue": "兽人", "category": "race"},
+        headers=headers,
+    )
+    entry_id = create.json()["data"]["id"]
+
+    update = client.put(
+        f"/dictionary/{entry_id}",
+        json={"termValue": "半兽人", "category": "quest", "remark": "剧情相关"},
+        headers=headers,
+    )
+    assert update.status_code == 200
+
+    response = client.get("/dictionary?termKey=orc", headers=headers)
+    item = response.json()["data"]["items"][0]
+    assert item["termValue"] == "半兽人"
+    assert item["category"] == "quest"
+    assert item["remark"] == "剧情相关"
+
+
+def test_dictionary_template_download_and_upload_upsert(seed_user):
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create = client.post(
+        "/dictionary",
+        json={"termKey": "orc", "termValue": "兽人", "category": "race", "remark": "旧备注"},
+        headers=headers,
+    )
+    assert create.status_code == 200
+
+    template_response = client.get("/dictionary/template", headers=headers)
+    assert template_response.status_code == 200
+    workbook = load_workbook(BytesIO(template_response.content))
+    sheet = workbook.active
+    headers_row = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+    assert headers_row == ["原文 key", "译文 value", "分类", "备注"]
+
+    upload_bytes = _build_dictionary_xlsx(
+        [
+          ["orc", "半兽人", "race", "已覆盖"],
+          ["elf", "精灵", "race", "新增词条"],
+        ]
+    )
+    upload_response = client.post(
+        "/dictionary/upload?fileName=dictionary.xlsx",
+        content=upload_bytes,
+        headers={
+            **headers,
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )
+    assert upload_response.status_code == 200
+    payload = upload_response.json()["data"]
+    assert payload["createdCount"] == 1
+    assert payload["updatedCount"] == 1
+
+    orc_response = client.get("/dictionary?termKey=orc", headers=headers)
+    orc_item = orc_response.json()["data"]["items"][0]
+    assert orc_item["termValue"] == "半兽人"
+    assert orc_item["remark"] == "已覆盖"
+
+    elf_response = client.get("/dictionary?termKey=elf", headers=headers)
+    elf_item = elf_response.json()["data"]["items"][0]
+    assert elf_item["termValue"] == "精灵"
+    assert elf_item["remark"] == "新增词条"
+
+
+def test_dictionary_upload_rejects_duplicate_term_key(seed_user):
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    upload_bytes = _build_dictionary_xlsx(
+        [
+          ["orc", "兽人", "race", None],
+          ["orc", "半兽人", "race", "重复"],
+        ]
+    )
+    upload_response = client.post(
+        "/dictionary/upload?fileName=dictionary.xlsx",
+        content=upload_bytes,
+        headers={
+            **headers,
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )
+    assert upload_response.status_code == 400
+    assert upload_response.json()["detail"] == "上传文件存在重复原文 key"
