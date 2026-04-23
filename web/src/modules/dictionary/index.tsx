@@ -1,14 +1,14 @@
 import type { ActionType, ProColumns } from "@ant-design/pro-components";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProFormInstance } from "@ant-design/pro-form";
-import { Button, Form, Input, Modal, Popover, Select, Space, Typography, message } from "antd";
+import { Button, Form, Input, Modal, Popover, Select, Space, Tag, Typography, message } from "antd";
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiFetch, getErrorMessage } from "../../api";
 import { getAppConfig } from "../../config";
 import { formatDateTime } from "../../utils/datetime";
-import { CATEGORY_LABELS, CATEGORY_OPTIONS } from "./constants";
+import { CATEGORY_LABELS, CATEGORY_META, CATEGORY_OPTIONS } from "./constants";
 import {
   SearchActionBar,
   type DownloadProgressSnapshot,
@@ -53,6 +53,26 @@ function renderLongText(value?: string | null) {
     >
       <Typography.Text style={{ whiteSpace: "pre-wrap" }}>{displayText}</Typography.Text>
     </Popover>
+  );
+}
+
+function renderCategoryTag(category?: string | null) {
+  if (!category) {
+    return "-";
+  }
+
+  const meta = CATEGORY_META[category];
+  return (
+    <Tag
+      color={meta?.color || "default"}
+      style={{
+        borderRadius: 999,
+        paddingInline: 10,
+        fontWeight: 500,
+      }}
+    >
+      {meta?.label || category}
+    </Tag>
   );
 }
 
@@ -252,7 +272,7 @@ export default function Dictionary() {
         valueEnum: Object.fromEntries(
           CATEGORY_OPTIONS.map((option) => [option.value, { text: option.label }])
         ),
-        render: (_, record) => (record.category ? CATEGORY_LABELS[record.category] || record.category : "-"),
+        render: (_, record) => renderCategoryTag(record.category),
       },
       {
         title: "备注",
@@ -430,7 +450,20 @@ export default function Dictionary() {
             <Input maxLength={128} />
           </Form.Item>
           <Form.Item name="category" label="分类">
-            <Select allowClear options={CATEGORY_OPTIONS} placeholder="请选择分类" />
+            <Select
+              allowClear
+              placeholder="请选择分类"
+              optionLabelProp="label"
+              options={CATEGORY_OPTIONS.map((option) => ({
+                ...option,
+                label: (
+                  <Space size={8}>
+                    {renderCategoryTag(option.value)}
+                    <Typography.Text type="secondary">{option.value}</Typography.Text>
+                  </Space>
+                ),
+              }))}
+            />
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={4} maxLength={255} placeholder="可填写补充说明" />
