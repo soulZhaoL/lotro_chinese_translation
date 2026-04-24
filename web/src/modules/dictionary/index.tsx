@@ -309,7 +309,7 @@ export default function Dictionary() {
       {
         title: "词条Key",
         dataIndex: "termKey",
-        width: 220,
+        width: 200,
         ellipsis: true,
         formItemProps: {
           rules: [{ max: 128, message: "最多 128 个字符" }],
@@ -318,7 +318,7 @@ export default function Dictionary() {
       {
         title: "词条Value",
         dataIndex: "termValue",
-        width: 220,
+        width: 200,
         render: (_, record) => renderLongText(record.termValue),
         formItemProps: {
           rules: [{ max: 128, message: "最多 128 个字符" }],
@@ -334,7 +334,6 @@ export default function Dictionary() {
       {
         title: "分类",
         dataIndex: "category",
-        width: 140,
         valueType: "select",
         valueEnum: Object.fromEntries(
           CATEGORY_OPTIONS.map((option) => [option.value, { text: option.label }])
@@ -344,53 +343,50 @@ export default function Dictionary() {
       {
         title: "纠错状态",
         dataIndex: "correctionStatus",
-        width: 120,
         hideInSearch: true,
         render: (_, record) => renderCorrectionStatus(record.correctionStatus, record.correctionStatusLabel),
       },
       {
         title: "最近纠错时间",
         dataIndex: "correctionLastFinishedAt",
-        width: 180,
         hideInSearch: true,
         render: (_, record) => formatDateTime(record.correctionLastFinishedAt),
       },
       {
         title: "上次更新文本数",
         dataIndex: "correctionUpdatedTextCount",
-        width: 130,
         hideInSearch: true,
         render: (_, record) => String(record.correctionUpdatedTextCount || 0),
       },
       {
         title: "备注",
         dataIndex: "remark",
-        width: 260,
         hideInSearch: true,
         render: (_, record) => renderLongText(record.remark),
       },
       {
         title: "修改人",
         dataIndex: "lastModifiedByName",
-        width: 140,
         hideInSearch: true,
         render: (_, record) => record.lastModifiedByName || "-",
       },
       {
         title: "更新时间",
         dataIndex: "uptTime",
-        width: 180,
         hideInSearch: true,
         render: (_, record) => formatDateTime(record.uptTime),
       },
       {
         title: "操作",
         key: "actions",
-        width: 160,
+        width: 130,
         hideInSearch: true,
         fixed: "right",
         render: (_, record) => (
           <Space size={8}>
+            <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => openEditModal(record)}>
+              修改
+            </Button>
             <Button
               type="link"
               size="small"
@@ -400,9 +396,6 @@ export default function Dictionary() {
               onClick={() => void handleCorrect(record)}
             >
               纠错
-            </Button>
-            <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => openEditModal(record)}>
-              修改
             </Button>
           </Space>
         ),
