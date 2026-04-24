@@ -45,4 +45,25 @@ export default [
       data: { id: Number(url.split("/").pop()) },
     }),
   },
+  {
+    url: /\/api\/dictionary\/\d+\/correct/,
+    method: "post",
+    response: ({ url }) => ({
+      success: true,
+      statusCode: 200,
+      code: "0000",
+      message: "操作成功",
+      data: {
+        dictionaryId: Number(url.split("/").slice(-2)[0]),
+        matchedTextCount: 12,
+        updatedTextCount: 8,
+        status: 3,
+        statusLabel: "已完成",
+        appliedCorrectionVersion: 2,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        error: null,
+      },
+    }),
+  },
 ] as MockMethod[];

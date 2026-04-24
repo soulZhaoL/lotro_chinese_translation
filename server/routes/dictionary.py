@@ -1,5 +1,7 @@
 # 词典管理路由。
+import json
 import os
+from contextlib import suppress
 from datetime import datetime
 from io import BytesIO
 from tempfile import NamedTemporaryFile
@@ -16,24 +18,36 @@ from starlette.background import BackgroundTask
 from ..config import get_config
 from ..db import db_cursor, db_stream_cursor
 from ..response import success_response
+from ..services import dictionary_correction
 from .deps import require_auth
 
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
 
-DICTIONARY_TEMPLATE_HEADERS: Tuple[str, ...] = ("原文 key", "译文 value", "分类", "备注")
+DICTIONARY_TEMPLATE_HEADERS: Tuple[str, ...] = ("原文 key", "标准译文", "译文变体JSON", "分类", "备注")
 
 
 class DictionaryCreateRequest(BaseModel):
     termKey: str
     termValue: str
+    variantValues: Optional[List[str]] = None
     category: Optional[str] = None
     remark: Optional[str] = None
 
 
 class DictionaryUpdateRequest(BaseModel):
     termValue: str
+    variantValues: Optional[List[str]] = None
     category: Optional[str] = None
     remark: Optional[str] = None
+
+
+CORRECTION_STATUS_LABELS = {
+    dictionary_correction.CORRECTION_STATUS_IDLE: "无需纠错",
+    dictionary_correction.CORRECTION_STATUS_PENDING: "待纠错",
+    dictionary_correction.CORRECTION_STATUS_RUNNING: "纠错中",
+    dictionary_correction.CORRECTION_STATUS_DONE: "已完成",
+    dictionary_correction.CORRECTION_STATUS_FAILED: "失败",
+}
 
 
 def _apply_pagination(page: int, page_size: int) -> int:
@@ -56,6 +70,126 @@ def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
         return None
     cleaned = value.strip()
     return cleaned if cleaned else None
+
+
+def _normalize_variant_values(values: Optional[List[Any]], term_value: str, field_name: str = "译文变体") -> Optional[List[str]]:
+    if values is None:
+        return None
+    if not isinstance(values, list):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field_name} 必须为字符串数组")
+
+    normalized: List[str] = []
+    seen = set()
+    for index, item in enumerate(values, start=1):
+        if not isinstance(item, str):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{field_name} 第 {index} 项必须为字符串",
+            )
+        cleaned = item.strip()
+        if not cleaned or cleaned == term_value or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _serialize_variant_values(values: Optional[List[str]]) -> Optional[str]:
+    if not values:
+        return None
+    return json.dumps(values, ensure_ascii=False)
+
+
+def _deserialize_variant_values(value: Any) -> List[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode("utf-8")
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            logger.warning("dictionary variantValues JSON parse failed, fallback to empty list: value={}", value)
+            return []
+    else:
+        parsed = value
+    if not isinstance(parsed, list):
+        return []
+    result: List[str] = []
+    seen = set()
+    for item in parsed:
+        if not isinstance(item, str):
+            continue
+        cleaned = item.strip()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        result.append(cleaned)
+    return result
+
+
+def _parse_variant_values_cell(value: Any, row_number: int) -> Optional[List[str]]:
+    raw = _parse_optional_str(value)
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"第 {row_number} 行字段 译文变体JSON 不是合法 JSON: {error.msg}",
+        ) from error
+    if not isinstance(parsed, list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"第 {row_number} 行字段 译文变体JSON 必须为 JSON 数组",
+        )
+    for index, item in enumerate(parsed, start=1):
+        if not isinstance(item, str):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"第 {row_number} 行字段 译文变体JSON 第 {index} 项必须为字符串",
+            )
+    return parsed
+
+
+def _resolve_correction_updates(
+    *,
+    term_key: str,
+    term_value: str,
+    variant_values: Optional[List[str]],
+    is_active: bool,
+    existing: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    normalized_variants = dictionary_correction.normalize_variant_values(variant_values)
+    current_version = int(existing["correctionVersion"]) if existing else 0
+    applied_version = int(existing["appliedCorrectionVersion"]) if existing else 0
+    current_status = int(existing["correctionStatus"]) if existing else dictionary_correction.CORRECTION_STATUS_IDLE
+    previous_term_key = existing["termKey"] if existing else None
+    previous_term_value = existing["termValue"] if existing else None
+    previous_variants = dictionary_correction.normalize_variant_values(existing["variantValues"]) if existing else []
+    previous_is_active = bool(existing["isActive"]) if existing else False
+
+    changed = existing is None or any(
+        [
+            previous_term_key != term_key,
+            previous_term_value != term_value,
+            previous_variants != normalized_variants,
+            previous_is_active != is_active,
+        ]
+    )
+    resolved = dictionary_correction.should_requeue_correction(
+        is_active,
+        normalized_variants,
+        changed,
+        current_version,
+        applied_version,
+        current_status,
+    )
+    return {
+        "variantValues": normalized_variants,
+        **resolved,
+    }
 
 
 def _is_empty_cell(value: Any) -> bool:
@@ -202,6 +336,14 @@ def list_dictionary(
               de.id,
               de."termKey" AS "termKey",
               de."termValue" AS "termValue",
+              de."variantValues" AS "variantValues",
+              de."correctionVersion" AS "correctionVersion",
+              de."appliedCorrectionVersion" AS "appliedCorrectionVersion",
+              de."correctionStatus" AS "correctionStatus",
+              de."correctionLastStartedAt" AS "correctionLastStartedAt",
+              de."correctionLastFinishedAt" AS "correctionLastFinishedAt",
+              de."correctionLastError" AS "correctionLastError",
+              de."correctionUpdatedTextCount" AS "correctionUpdatedTextCount",
               de.category,
               de.remark,
               de."isActive" AS "isActive",
@@ -218,6 +360,9 @@ def list_dictionary(
             tuple(params + [effective_page_size, offset]),
         )
         items = cursor.fetchall()
+        for item in items:
+            item["variantValues"] = _deserialize_variant_values(item.get("variantValues"))
+            item["correctionStatusLabel"] = CORRECTION_STATUS_LABELS.get(item["correctionStatus"], "未知")
 
     logger.info("Dict list complete: total={} page={} pageSize={} userId={}", total, page, effective_page_size, user["userId"])
     return success_response(
@@ -235,8 +380,16 @@ def create_dictionary(request: DictionaryCreateRequest, user: Dict[str, Any] = D
     """新增词典条目。"""
     term_key = _require_non_empty_text(request.termKey, "原文 key")
     term_value = _require_non_empty_text(request.termValue, "译文 value")
+    variant_values = _normalize_variant_values(request.variantValues, term_value)
     category = _normalize_optional_text(request.category)
     remark = _normalize_optional_text(request.remark)
+    correction_updates = _resolve_correction_updates(
+        term_key=term_key,
+        term_value=term_value,
+        variant_values=variant_values,
+        is_active=True,
+        existing=None,
+    )
 
     logger.info("Dict create: termKey={} category={} userId={}", term_key, category, user["userId"])
     with db_cursor() as cursor:
@@ -249,6 +402,14 @@ def create_dictionary(request: DictionaryCreateRequest, user: Dict[str, Any] = D
             INSERT INTO dictionary_entries (
               "termKey",
               "termValue",
+              "variantValues",
+              "correctionVersion",
+              "appliedCorrectionVersion",
+              "correctionStatus",
+              "correctionLastStartedAt",
+              "correctionLastFinishedAt",
+              "correctionLastError",
+              "correctionUpdatedTextCount",
               category,
               remark,
               "isActive",
@@ -256,9 +417,19 @@ def create_dictionary(request: DictionaryCreateRequest, user: Dict[str, Any] = D
               "crtTime",
               "uptTime"
             )
-            VALUES (%s, %s, %s, %s, TRUE, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NULL, NULL, NULL, 0, %s, %s, TRUE, %s, NOW(), NOW())
             """,
-            (term_key, term_value, category, remark, user["userId"]),
+            (
+                term_key,
+                term_value,
+                _serialize_variant_values(correction_updates["variantValues"]),
+                correction_updates["correctionVersion"],
+                correction_updates["appliedCorrectionVersion"],
+                correction_updates["correctionStatus"],
+                category,
+                remark,
+                user["userId"],
+            ),
         )
         entry_id = cursor.lastrowid
 
@@ -270,32 +441,115 @@ def create_dictionary(request: DictionaryCreateRequest, user: Dict[str, Any] = D
 def update_dictionary(entryId: int, request: DictionaryUpdateRequest, user: Dict[str, Any] = Depends(require_auth)):
     """更新词典条目。"""
     term_value = _require_non_empty_text(request.termValue, "译文 value")
+    variant_values = _normalize_variant_values(request.variantValues, term_value)
     category = _normalize_optional_text(request.category)
     remark = _normalize_optional_text(request.remark)
 
     logger.info("Dict update: entryId={} category={} userId={}", entryId, category, user["userId"])
     with db_cursor() as cursor:
-        cursor.execute('SELECT id, "termKey" AS "termKey" FROM dictionary_entries WHERE id = %s', (entryId,))
+        cursor.execute(
+            """
+            SELECT
+              id,
+              "termKey" AS "termKey",
+              "termValue" AS "termValue",
+              "variantValues" AS "variantValues",
+              "isActive" AS "isActive",
+              "correctionVersion" AS "correctionVersion",
+              "appliedCorrectionVersion" AS "appliedCorrectionVersion",
+              "correctionStatus" AS "correctionStatus"
+            FROM dictionary_entries
+            WHERE id = %s
+            """,
+            (entryId,),
+        )
         entry = cursor.fetchone()
         if entry is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="词条不存在")
+        entry["variantValues"] = _deserialize_variant_values(entry.get("variantValues"))
+        correction_updates = _resolve_correction_updates(
+            term_key=entry["termKey"],
+            term_value=term_value,
+            variant_values=variant_values,
+            is_active=entry["isActive"],
+            existing=entry,
+        )
 
         cursor.execute(
-            """
-            UPDATE dictionary_entries
-            SET
-              "termValue" = %s,
-              category = %s,
-              remark = %s,
-              "lastModifiedBy" = %s,
-              "uptTime" = NOW()
-            WHERE id = %s
-            """,
-            (term_value, category, remark, user["userId"], entryId),
+            (
+                """
+                UPDATE dictionary_entries
+                SET
+                  "termValue" = %s,
+                  "variantValues" = %s,
+                  "correctionVersion" = %s,
+                  "appliedCorrectionVersion" = %s,
+                  "correctionStatus" = %s,
+                  "correctionLastStartedAt" = NULL,
+                  "correctionLastFinishedAt" = NULL,
+                  "correctionLastError" = NULL,
+                  "correctionUpdatedTextCount" = 0,
+                  category = %s,
+                  remark = %s,
+                  "lastModifiedBy" = %s,
+                  "uptTime" = NOW()
+                WHERE id = %s
+                """
+                if correction_updates["resetCorrectionMeta"]
+                else """
+                UPDATE dictionary_entries
+                SET
+                  "termValue" = %s,
+                  "variantValues" = %s,
+                  "correctionVersion" = %s,
+                  "appliedCorrectionVersion" = %s,
+                  "correctionStatus" = %s,
+                  category = %s,
+                  remark = %s,
+                  "lastModifiedBy" = %s,
+                  "uptTime" = NOW()
+                WHERE id = %s
+                """,
+                (
+                    term_value,
+                    _serialize_variant_values(correction_updates["variantValues"]),
+                    correction_updates["correctionVersion"],
+                    correction_updates["appliedCorrectionVersion"],
+                    correction_updates["correctionStatus"],
+                    category,
+                    remark,
+                    user["userId"],
+                    entryId,
+                ),
+            )
         )
 
     logger.info("Dict updated: entryId={} termKey={} userId={}", entryId, entry["termKey"], user["userId"])
     return success_response({"id": entryId})
+
+
+@router.post("/{entryId}/correct")
+def correct_dictionary_entry(entryId: int, user: Dict[str, Any] = Depends(require_auth)):
+    logger.info("Dict correction requested: entryId={} userId={}", entryId, user["userId"])
+    try:
+        result = dictionary_correction.run_dictionary_correction(entryId)
+    except Exception as error:
+        dictionary_correction.mark_dictionary_correction_failed(entryId, str(error))
+        logger.exception("Dict correction failed: entryId={} userId={} error={}", entryId, user["userId"], error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"系统纠错失败: {error}") from error
+    return success_response(
+        {
+            "dictionaryId": result.dictionary_id,
+            "matchedTextCount": result.matched_text_count,
+            "updatedTextCount": result.updated_text_count,
+            "status": result.status,
+            "statusLabel": CORRECTION_STATUS_LABELS.get(result.status, "未知"),
+            "appliedCorrectionVersion": result.applied_version,
+            "startedAt": result.started_at,
+            "finishedAt": result.finished_at,
+            "error": result.error,
+        }
+    )
 
 
 @router.get("/template")
@@ -364,6 +618,7 @@ def download_dictionary(
                 SELECT
                   de."termKey" AS "termKey",
                   de."termValue" AS "termValue",
+                  de."variantValues" AS "variantValues",
                   de.category,
                   de.remark
                 FROM dictionary_entries de
@@ -385,7 +640,15 @@ def download_dictionary(
                             status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"导出数据量超过限制（{max_download_rows}），请缩小筛选范围后重试",
                         )
-                    sheet.append([row["termKey"], row["termValue"], row["category"], row["remark"]])
+                    sheet.append(
+                        [
+                            row["termKey"],
+                            row["termValue"],
+                            _serialize_variant_values(_deserialize_variant_values(row.get("variantValues"))),
+                            row["category"],
+                            row["remark"],
+                        ]
+                    )
                 if batch_count == 1 or batch_count % download_progress_log_every_batches == 0:
                     logger.info(
                         "download_dictionary progress: batch={} batchRows={} fetchedRows={} exportRows={} elapsedSec={:.3f}",
@@ -482,15 +745,17 @@ async def upload_dictionary(
             )
 
         term_key = _parse_required_str(cells[0], "原文 key", row_index)
-        term_value = _parse_required_str(cells[1], "译文 value", row_index)
+        term_value = _parse_required_str(cells[1], "标准译文", row_index)
+        variant_values = _parse_variant_values_cell(cells[2], row_index)
         upload_term_keys.append(term_key)
         parsed_rows.append(
             {
                 "rowNumber": row_index,
                 "termKey": term_key,
                 "termValue": term_value,
-                "category": _parse_optional_str(cells[2]),
-                "remark": _parse_optional_str(cells[3]),
+                "variantValues": _normalize_variant_values(variant_values, term_value, "译文变体JSON"),
+                "category": _parse_optional_str(cells[3]),
+                "remark": _parse_optional_str(cells[4]),
             }
         )
 
@@ -527,11 +792,26 @@ async def upload_dictionary(
         for item in parsed_rows:
             existing = existing_map.get(item["termKey"])
             if existing is None:
+                correction_updates = _resolve_correction_updates(
+                    term_key=item["termKey"],
+                    term_value=item["termValue"],
+                    variant_values=item["variantValues"],
+                    is_active=True,
+                    existing=None,
+                )
                 cursor.execute(
                     """
                     INSERT INTO dictionary_entries (
                       "termKey",
                       "termValue",
+                      "variantValues",
+                      "correctionVersion",
+                      "appliedCorrectionVersion",
+                      "correctionStatus",
+                      "correctionLastStartedAt",
+                      "correctionLastFinishedAt",
+                      "correctionLastError",
+                      "correctionUpdatedTextCount",
                       category,
                       remark,
                       "isActive",
@@ -539,24 +819,94 @@ async def upload_dictionary(
                       "crtTime",
                       "uptTime"
                     )
-                    VALUES (%s, %s, %s, %s, TRUE, %s, NOW(), NOW())
+                    VALUES (%s, %s, %s, %s, %s, %s, NULL, NULL, NULL, 0, %s, %s, TRUE, %s, NOW(), NOW())
                     """,
-                    (item["termKey"], item["termValue"], item["category"], item["remark"], user["userId"]),
+                    (
+                        item["termKey"],
+                        item["termValue"],
+                        _serialize_variant_values(correction_updates["variantValues"]),
+                        correction_updates["correctionVersion"],
+                        correction_updates["appliedCorrectionVersion"],
+                        correction_updates["correctionStatus"],
+                        item["category"],
+                        item["remark"],
+                        user["userId"],
+                    ),
                 )
                 created_count += 1
             else:
                 cursor.execute(
                     """
-                    UPDATE dictionary_entries
-                    SET
-                      "termValue" = %s,
-                      category = %s,
-                      remark = %s,
-                      "lastModifiedBy" = %s,
-                      "uptTime" = NOW()
+                    SELECT
+                      id,
+                      "termKey" AS "termKey",
+                      "termValue" AS "termValue",
+                      "variantValues" AS "variantValues",
+                      "isActive" AS "isActive",
+                      "correctionVersion" AS "correctionVersion",
+                      "appliedCorrectionVersion" AS "appliedCorrectionVersion",
+                      "correctionStatus" AS "correctionStatus"
+                    FROM dictionary_entries
                     WHERE id = %s
                     """,
-                    (item["termValue"], item["category"], item["remark"], user["userId"], existing["id"]),
+                    (existing["id"],),
+                )
+                existing_entry = cursor.fetchone()
+                existing_entry["variantValues"] = _deserialize_variant_values(existing_entry.get("variantValues"))
+                correction_updates = _resolve_correction_updates(
+                    term_key=existing_entry["termKey"],
+                    term_value=item["termValue"],
+                    variant_values=item["variantValues"],
+                    is_active=existing_entry["isActive"],
+                    existing=existing_entry,
+                )
+                cursor.execute(
+                    (
+                        """
+                        UPDATE dictionary_entries
+                        SET
+                          "termValue" = %s,
+                          "variantValues" = %s,
+                          "correctionVersion" = %s,
+                          "appliedCorrectionVersion" = %s,
+                          "correctionStatus" = %s,
+                          "correctionLastStartedAt" = NULL,
+                          "correctionLastFinishedAt" = NULL,
+                          "correctionLastError" = NULL,
+                          "correctionUpdatedTextCount" = 0,
+                          category = %s,
+                          remark = %s,
+                          "lastModifiedBy" = %s,
+                          "uptTime" = NOW()
+                        WHERE id = %s
+                        """
+                        if correction_updates["resetCorrectionMeta"]
+                        else """
+                        UPDATE dictionary_entries
+                        SET
+                          "termValue" = %s,
+                          "variantValues" = %s,
+                          "correctionVersion" = %s,
+                          "appliedCorrectionVersion" = %s,
+                          "correctionStatus" = %s,
+                          category = %s,
+                          remark = %s,
+                          "lastModifiedBy" = %s,
+                          "uptTime" = NOW()
+                        WHERE id = %s
+                        """,
+                        (
+                            item["termValue"],
+                            _serialize_variant_values(correction_updates["variantValues"]),
+                            correction_updates["correctionVersion"],
+                            correction_updates["appliedCorrectionVersion"],
+                            correction_updates["correctionStatus"],
+                            item["category"],
+                            item["remark"],
+                            user["userId"],
+                            existing["id"],
+                        ),
+                    ),
                 )
                 updated_count += 1
 

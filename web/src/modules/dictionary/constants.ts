@@ -19,3 +19,16 @@ export const CATEGORY_OPTIONS = Object.entries(CATEGORY_META).map(([value, meta]
   value,
   label: meta.label,
 }));
+
+export type DictionaryCorrectionStatusMeta = {
+  label: string;
+  color: string;
+};
+
+export const DICTIONARY_CORRECTION_STATUS_META: Record<number, DictionaryCorrectionStatusMeta> = {
+  0: { label: "无需纠错", color: "default" },
+  1: { label: "待纠错", color: "orange" },
+  2: { label: "纠错中", color: "processing" },
+  3: { label: "已完成", color: "success" },
+  4: { label: "失败", color: "error" },
+};

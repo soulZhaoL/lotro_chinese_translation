@@ -81,6 +81,23 @@ def get_connection():
     )
 
 
+def get_raw_connection():
+    dsn = _get_dsn()
+    mysql = _parse_mysql_dsn(dsn)
+    return pymysql.connect(
+        host=mysql["host"],
+        port=mysql["port"],
+        user=mysql["user"],
+        password=mysql["password"],
+        database=mysql["database"],
+        charset=mysql["charset"],
+        cursorclass=DictCursor,
+        conv=_build_mysql_converters(),
+        init_command="SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES'), group_concat_max_len = 16777216",
+        autocommit=True,
+    )
+
+
 @contextmanager
 def db_cursor():
     with get_connection() as connection:

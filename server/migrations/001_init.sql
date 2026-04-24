@@ -28,6 +28,9 @@ CREATE TABLE users (
   UNIQUE KEY uq_users_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户表';
 
+INSERT INTO users (username, `passwordHash`, `passwordSalt`, `isGuest`, `crtTime`, `uptTime`)
+VALUES ('SYSTEM', '0000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000', FALSE, NOW(), NOW());
+
 CREATE TABLE roles (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   name VARCHAR(32) NOT NULL COMMENT '角色名',
@@ -126,6 +129,14 @@ CREATE TABLE dictionary_entries (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `termKey` VARCHAR(128) NOT NULL COMMENT '词条Key',
   `termValue` VARCHAR(128) NOT NULL COMMENT '词条Value',
+  `variantValues` JSON NULL COMMENT '非标准/历史译文变体列表',
+  `correctionVersion` INT NOT NULL DEFAULT 0 COMMENT '当前纠错版本',
+  `appliedCorrectionVersion` INT NOT NULL DEFAULT 0 COMMENT '已应用纠错版本',
+  `correctionStatus` SMALLINT NOT NULL DEFAULT 0 COMMENT '纠错状态（0=无需纠错,1=待纠错,2=纠错中,3=已完成,4=失败）',
+  `correctionLastStartedAt` TIMESTAMP NULL COMMENT '最近纠错开始时间',
+  `correctionLastFinishedAt` TIMESTAMP NULL COMMENT '最近纠错完成时间',
+  `correctionLastError` VARCHAR(255) NULL COMMENT '最近纠错错误信息',
+  `correctionUpdatedTextCount` INT NOT NULL DEFAULT 0 COMMENT '最近纠错更新文本数',
   category VARCHAR(64) COMMENT '分类',
   remark VARCHAR(255) COMMENT '备注',
   `isActive` BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否启用',
@@ -136,6 +147,8 @@ CREATE TABLE dictionary_entries (
   UNIQUE KEY uq_dictionary_term_key (`termKey`),
   KEY idx_dictionary_key (`termKey`),
   KEY idx_dictionary_value (`termValue`),
+  KEY idx_dictionary_correction_status (`correctionStatus`),
+  KEY idx_dictionary_correction_version (`correctionVersion`, `appliedCorrectionVersion`),
   KEY idx_dictionary_category (category),
   KEY idx_dictionary_last_modified_by (`lastModifiedBy`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='词典条目表';

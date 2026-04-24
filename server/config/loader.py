@@ -19,6 +19,7 @@ _REQUIRED_TOP_LEVEL_KEYS = (
     "text_list",
     "maintenance",
     "text_import_export",
+    "dictionary_correction",
 )
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
@@ -116,6 +117,7 @@ def load_config() -> Dict[str, Any]:
     text_list = _require_type(_require_key(data, "text_list", ""), dict, "text_list")
     maintenance = _require_type(_require_key(data, "maintenance", ""), dict, "maintenance")
     text_import_export = _require_type(_require_key(data, "text_import_export", ""), dict, "text_import_export")
+    dictionary_correction = _require_type(_require_key(data, "dictionary_correction", ""), dict, "dictionary_correction")
 
     _require_type(_require_key(database, "dsn", "database."), str, "database.dsn")
 
@@ -168,6 +170,25 @@ def load_config() -> Dict[str, Any]:
         str,
         "text_import_export.download_temp_dir",
     )
+    dictionary_correction["enabled"] = _parse_bool(
+        _require_key(dictionary_correction, "enabled", "dictionary_correction."),
+        "dictionary_correction.enabled",
+    )
+    _require_type(
+        _require_key(dictionary_correction, "scan_interval_seconds", "dictionary_correction."),
+        int,
+        "dictionary_correction.scan_interval_seconds",
+    )
+    _require_type(
+        _require_key(dictionary_correction, "batch_size", "dictionary_correction."),
+        int,
+        "dictionary_correction.batch_size",
+    )
+    _require_type(
+        _require_key(dictionary_correction, "lock_name", "dictionary_correction."),
+        str,
+        "dictionary_correction.lock_name",
+    )
     if text_import_export["max_upload_rows"] <= 0:
         raise ConfigError("配置项无效: text_import_export.max_upload_rows 必须 > 0")
     if text_import_export["max_download_rows"] <= 0:
@@ -178,6 +199,12 @@ def load_config() -> Dict[str, Any]:
         raise ConfigError("配置项无效: text_import_export.download_progress_log_every_batches 必须 > 0")
     if not text_import_export["download_temp_dir"].strip():
         raise ConfigError("配置项无效: text_import_export.download_temp_dir 不能为空")
+    if dictionary_correction["scan_interval_seconds"] <= 0:
+        raise ConfigError("配置项无效: dictionary_correction.scan_interval_seconds 必须 > 0")
+    if dictionary_correction["batch_size"] <= 0:
+        raise ConfigError("配置项无效: dictionary_correction.batch_size 必须 > 0")
+    if not dictionary_correction["lock_name"].strip():
+        raise ConfigError("配置项无效: dictionary_correction.lock_name 不能为空")
     if logging_config["request_max_body_length"] <= 0:
         raise ConfigError("配置项无效: logging.request_max_body_length 必须 > 0")
     for idx, item in enumerate(logging_config["redact_fields"]):

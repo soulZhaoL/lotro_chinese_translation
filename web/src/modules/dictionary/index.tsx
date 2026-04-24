@@ -9,7 +9,7 @@ import { apiFetch, getErrorMessage } from "../../api";
 import PrettyTag from "../../components/PrettyTag";
 import { getAppConfig } from "../../config";
 import { formatDateTime } from "../../utils/datetime";
-import { CATEGORY_META, CATEGORY_OPTIONS } from "./constants";
+import { CATEGORY_META, CATEGORY_OPTIONS, DICTIONARY_CORRECTION_STATUS_META } from "./constants";
 import {
   SearchActionBar,
   type DownloadProgressSnapshot,
@@ -30,6 +30,7 @@ const TABLE_SCROLL_X = 1320;
 const DISPLAY_LIMIT = 80;
 const TOOLTIP_LIMIT = 5000;
 const POPOVER_MAX_WIDTH = "min(620px, calc(100vw - 48px))";
+const VARIANT_TAG_COLORS = ["magenta", "orange", "volcano", "geekblue", "lime", "cyan"] as const;
 
 function truncateText(text: string, limit: number): string {
   if (text.length <= limit) {
@@ -66,6 +67,44 @@ function renderCategoryTag(category?: string | null) {
   return <PrettyTag color={meta?.color}>{meta?.label || category}</PrettyTag>;
 }
 
+function normalizeVariantValues(values?: string[] | null): string[] {
+  if (!values?.length) {
+    return [];
+  }
+  const result: string[] = [];
+  const seen = new Set<string>();
+  values.forEach((value) => {
+    const cleaned = value.trim();
+    if (!cleaned || seen.has(cleaned)) {
+      return;
+    }
+    seen.add(cleaned);
+    result.push(cleaned);
+  });
+  return result;
+}
+
+function renderVariantTags(values?: string[] | null) {
+  const normalized = normalizeVariantValues(values);
+  if (!normalized.length) {
+    return "-";
+  }
+  return (
+    <Space size={[6, 6]} wrap>
+      {normalized.map((value, index) => (
+        <PrettyTag key={`${value}-${index}`} color={VARIANT_TAG_COLORS[index % VARIANT_TAG_COLORS.length]}>
+          {value}
+        </PrettyTag>
+      ))}
+    </Space>
+  );
+}
+
+function renderCorrectionStatus(status?: number, label?: string) {
+  const meta = typeof status === "number" ? DICTIONARY_CORRECTION_STATUS_META[status] : undefined;
+  return <PrettyTag color={meta?.color}>{label || meta?.label || "-"}</PrettyTag>;
+}
+
 export default function Dictionary() {
   const actionRef = useRef<ActionType>();
   const formRef = useRef<ProFormInstance<DictionaryFilters> | undefined>(undefined);
@@ -80,6 +119,7 @@ export default function Dictionary() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingFiltered, setDownloadingFiltered] = useState(false);
+  const [correctingId, setCorrectingId] = useState<number | null>(null);
   const [filteredDownloadStageText, setFilteredDownloadStageText] = useState("导出");
 
   const syncModalForm = useCallback(() => {
@@ -87,6 +127,7 @@ export default function Dictionary() {
       modalForm.setFieldsValue({
         termKey: editingItem.termKey,
         termValue: editingItem.termValue,
+        variantValues: editingItem.variantValues,
         category: editingItem.category || undefined,
         remark: editingItem.remark || undefined,
       });
@@ -128,20 +169,25 @@ export default function Dictionary() {
     try {
       setSubmitting(true);
       const values = await modalForm.validateFields();
+      const payload = {
+        ...values,
+        variantValues: normalizeVariantValues(values.variantValues),
+      };
       if (editingItem) {
         await apiFetch(`/dictionary/${editingItem.id}`, {
           method: "PUT",
           body: JSON.stringify({
-            termValue: values.termValue,
-            category: values.category,
-            remark: values.remark,
+            termValue: payload.termValue,
+            variantValues: payload.variantValues,
+            category: payload.category,
+            remark: payload.remark,
           }),
         });
         message.success("修改成功");
       } else {
         await apiFetch("/dictionary", {
           method: "POST",
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         });
         message.success("新增成功");
       }
@@ -234,6 +280,30 @@ export default function Dictionary() {
     }
   }, []);
 
+  const handleCorrect = useCallback(
+    async (record: DictionaryItem) => {
+      if (correctingId === record.id || record.correctionStatus === 2) {
+        return;
+      }
+      try {
+        setCorrectingId(record.id);
+        const result = await apiFetch<{ matchedTextCount: number; updatedTextCount: number }>(
+          `/dictionary/${record.id}/correct`,
+          {
+            method: "POST",
+          }
+        );
+        message.success(`纠错完成，命中 ${result.matchedTextCount} 条，更新 ${result.updatedTextCount} 条`);
+        actionRef.current?.reload();
+      } catch (error) {
+        message.error(getErrorMessage(error, "系统纠错失败"));
+      } finally {
+        setCorrectingId(null);
+      }
+    },
+    [correctingId]
+  );
+
   const columns = useMemo<ProColumns<DictionaryItem>[]>(
     () => [
       {
@@ -255,6 +325,13 @@ export default function Dictionary() {
         },
       },
       {
+        title: "译文变体",
+        dataIndex: "variantValues",
+        width: 260,
+        hideInSearch: true,
+        render: (_, record) => renderVariantTags(record.variantValues),
+      },
+      {
         title: "分类",
         dataIndex: "category",
         width: 140,
@@ -263,6 +340,27 @@ export default function Dictionary() {
           CATEGORY_OPTIONS.map((option) => [option.value, { text: option.label }])
         ),
         render: (_, record) => renderCategoryTag(record.category),
+      },
+      {
+        title: "纠错状态",
+        dataIndex: "correctionStatus",
+        width: 120,
+        hideInSearch: true,
+        render: (_, record) => renderCorrectionStatus(record.correctionStatus, record.correctionStatusLabel),
+      },
+      {
+        title: "最近纠错时间",
+        dataIndex: "correctionLastFinishedAt",
+        width: 180,
+        hideInSearch: true,
+        render: (_, record) => formatDateTime(record.correctionLastFinishedAt),
+      },
+      {
+        title: "上次更新文本数",
+        dataIndex: "correctionUpdatedTextCount",
+        width: 130,
+        hideInSearch: true,
+        render: (_, record) => String(record.correctionUpdatedTextCount || 0),
       },
       {
         title: "备注",
@@ -288,11 +386,21 @@ export default function Dictionary() {
       {
         title: "操作",
         key: "actions",
-        width: 100,
+        width: 160,
         hideInSearch: true,
         fixed: "right",
         render: (_, record) => (
           <Space size={8}>
+            <Button
+              type="link"
+              size="small"
+              style={{ paddingInline: 0 }}
+              loading={correctingId === record.id}
+              disabled={record.correctionStatus === 2}
+              onClick={() => void handleCorrect(record)}
+            >
+              纠错
+            </Button>
             <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => openEditModal(record)}>
               修改
             </Button>
@@ -300,7 +408,7 @@ export default function Dictionary() {
         ),
       },
     ],
-    [openEditModal]
+    [correctingId, handleCorrect, openEditModal]
   );
 
   return (
@@ -421,6 +529,7 @@ export default function Dictionary() {
           initialValues={{
             termKey: "",
             termValue: "",
+            variantValues: [],
             category: undefined,
             remark: "",
           }}
@@ -438,6 +547,14 @@ export default function Dictionary() {
             rules={[{ required: true, message: "请输入词条Value" }]}
           >
             <Input maxLength={128} />
+          </Form.Item>
+          <Form.Item name="variantValues" label="译文变体">
+            <Select
+              mode="tags"
+              placeholder="输入系统内常见误译或历史译法，按回车新增一项"
+              maxTagCount="responsive"
+              options={[]}
+            />
           </Form.Item>
           <Form.Item name="category" label="分类">
             <Select

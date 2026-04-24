@@ -67,3 +67,9 @@ text_import_export:
   download_fetch_batch_size: 2000
   download_progress_log_every_batches: 10
   download_temp_dir: "/tmp"
+
+dictionary_correction:
+  enabled: true
+  scan_interval_seconds: 300
+  batch_size: 20
+  lock_name: "lotro_dictionary_correction"
