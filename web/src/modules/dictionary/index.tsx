@@ -349,6 +349,7 @@ export default function Dictionary() {
       {
         title: "最近纠错时间",
         dataIndex: "correctionLastFinishedAt",
+        width: 130,
         hideInSearch: true,
         render: (_, record) => formatDateTime(record.correctionLastFinishedAt),
       },
@@ -361,18 +362,21 @@ export default function Dictionary() {
       {
         title: "备注",
         dataIndex: "remark",
+        width: 150,
         hideInSearch: true,
         render: (_, record) => renderLongText(record.remark),
       },
       {
         title: "修改人",
         dataIndex: "lastModifiedByName",
+        
         hideInSearch: true,
         render: (_, record) => record.lastModifiedByName || "-",
       },
       {
         title: "更新时间",
         dataIndex: "uptTime",
+        width: 130,
         hideInSearch: true,
         render: (_, record) => formatDateTime(record.uptTime),
       },
