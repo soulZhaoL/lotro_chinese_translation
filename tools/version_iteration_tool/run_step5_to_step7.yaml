@@ -4,9 +4,9 @@ database:
   dsnEnv: LOTRO_DATABASE_DSN
 
 tables:
-  backupTable: lotro.text_main_bak_u46_1
+  backupTable: lotro.text_main_bak_u47_2
   nextTable: lotro.text_main_next
-  mapTable: lotro.textIdMap_u46_1_to_u47_2
+  mapTable: lotro.textIdMap_u47_2_to_u48
   changesTable: lotro.text_changes
 
 startStep: 5
