@@ -195,7 +195,7 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
                 """,
                 (CORRECTION_STATUS_IDLE, entry_id),
             )
-            return CorrectionResult(
+            result = CorrectionResult(
                 dictionary_id=entry_id,
                 matched_text_count=0,
                 updated_text_count=0,
@@ -205,6 +205,15 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
                 finished_at=datetime.now().isoformat(),
                 error=None,
             )
+            logger.info(
+                "dictionary correction skipped: entryId={} termKey={} isActive={} variantCount={} status={}",
+                entry_id,
+                entry["termKey"],
+                bool(entry["isActive"]),
+                len(variant_values),
+                CORRECTION_STATUS_IDLE,
+            )
+            return result
 
         cursor.execute(
             """
