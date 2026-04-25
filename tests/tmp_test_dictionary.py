@@ -35,7 +35,13 @@ def test_dictionary_filter_and_create_with_remark(seed_user):
 
     create = client.post(
         "/dictionary",
-        json={"termKey": "orc", "termValue": "兽人", "category": "race", "remark": "怪物称呼"},
+        json={
+            "termKey": "orc",
+            "termValue": "兽人",
+            "variantValues": ["半兽人", "奥克", "兽人"],
+            "category": "race",
+            "remark": "怪物称呼",
+        },
         headers=headers,
     )
     assert create.status_code == 200
@@ -45,6 +51,7 @@ def test_dictionary_filter_and_create_with_remark(seed_user):
     data = response.json()["data"]
     assert data["total"] == 1
     assert data["items"][0]["termKey"] == "orc"
+    assert data["items"][0]["variantValues"] == ["半兽人", "奥克"]
     assert data["items"][0]["remark"] == "怪物称呼"
     assert data["items"][0]["lastModifiedByName"] == seed_user["username"]
 
@@ -63,7 +70,12 @@ def test_dictionary_update(seed_user):
 
     update = client.put(
         f"/dictionary/{entry_id}",
-        json={"termValue": "半兽人", "category": "quest", "remark": "剧情相关"},
+        json={
+            "termValue": "半兽人",
+            "variantValues": ["兽人", "奥克", "半兽人", "奥克"],
+            "category": "quest",
+            "remark": "剧情相关",
+        },
         headers=headers,
     )
     assert update.status_code == 200
@@ -71,6 +83,7 @@ def test_dictionary_update(seed_user):
     response = client.get("/dictionary?termKey=orc", headers=headers)
     item = response.json()["data"]["items"][0]
     assert item["termValue"] == "半兽人"
+    assert item["variantValues"] == ["兽人", "奥克"]
     assert item["category"] == "quest"
     assert item["remark"] == "剧情相关"
 

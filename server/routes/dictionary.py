@@ -475,54 +475,53 @@ def update_dictionary(entryId: int, request: DictionaryUpdateRequest, user: Dict
             existing=entry,
         )
 
-        cursor.execute(
-            (
-                """
-                UPDATE dictionary_entries
-                SET
-                  "termValue" = %s,
-                  "variantValues" = %s,
-                  "correctionVersion" = %s,
-                  "appliedCorrectionVersion" = %s,
-                  "correctionStatus" = %s,
-                  "correctionLastStartedAt" = NULL,
-                  "correctionLastFinishedAt" = NULL,
-                  "correctionLastError" = NULL,
-                  "correctionUpdatedTextCount" = 0,
-                  category = %s,
-                  remark = %s,
-                  "lastModifiedBy" = %s,
-                  "uptTime" = NOW()
-                WHERE id = %s
-                """
-                if correction_updates["resetCorrectionMeta"]
-                else """
-                UPDATE dictionary_entries
-                SET
-                  "termValue" = %s,
-                  "variantValues" = %s,
-                  "correctionVersion" = %s,
-                  "appliedCorrectionVersion" = %s,
-                  "correctionStatus" = %s,
-                  category = %s,
-                  remark = %s,
-                  "lastModifiedBy" = %s,
-                  "uptTime" = NOW()
-                WHERE id = %s
-                """,
-                (
-                    term_value,
-                    _serialize_variant_values(correction_updates["variantValues"]),
-                    correction_updates["correctionVersion"],
-                    correction_updates["appliedCorrectionVersion"],
-                    correction_updates["correctionStatus"],
-                    category,
-                    remark,
-                    user["userId"],
-                    entryId,
-                ),
-            )
+        update_sql = (
+            """
+            UPDATE dictionary_entries
+            SET
+              "termValue" = %s,
+              "variantValues" = %s,
+              "correctionVersion" = %s,
+              "appliedCorrectionVersion" = %s,
+              "correctionStatus" = %s,
+              "correctionLastStartedAt" = NULL,
+              "correctionLastFinishedAt" = NULL,
+              "correctionLastError" = NULL,
+              "correctionUpdatedTextCount" = 0,
+              category = %s,
+              remark = %s,
+              "lastModifiedBy" = %s,
+              "uptTime" = NOW()
+            WHERE id = %s
+            """
+            if correction_updates["resetCorrectionMeta"]
+            else """
+            UPDATE dictionary_entries
+            SET
+              "termValue" = %s,
+              "variantValues" = %s,
+              "correctionVersion" = %s,
+              "appliedCorrectionVersion" = %s,
+              "correctionStatus" = %s,
+              category = %s,
+              remark = %s,
+              "lastModifiedBy" = %s,
+              "uptTime" = NOW()
+            WHERE id = %s
+            """
         )
+        update_params = (
+            term_value,
+            _serialize_variant_values(correction_updates["variantValues"]),
+            correction_updates["correctionVersion"],
+            correction_updates["appliedCorrectionVersion"],
+            correction_updates["correctionStatus"],
+            category,
+            remark,
+            user["userId"],
+            entryId,
+        )
+        cursor.execute(update_sql, update_params)
 
     logger.info("Dict updated: entryId={} termKey={} userId={}", entryId, entry["termKey"], user["userId"])
     return success_response({"id": entryId})
