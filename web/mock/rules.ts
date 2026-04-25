@@ -185,6 +185,49 @@ export function generateDictionary(query: Query) {
   return items;
 }
 
+export function generateDictionaryCorrectionRecords(dictionaryId: number) {
+  const hasAbnormal = dictionaryId % 5 === 4;
+  const correctionVersion = dictionaryId % 5 === 0 ? 2 : 1;
+  if (!hasAbnormal) {
+    return {
+      entryId: dictionaryId,
+      termKey: `term_${Math.max(0, dictionaryId - 3000)}`,
+      correctionVersion,
+      onlyAbnormal: true,
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 200,
+    };
+  }
+
+  const items = Array.from({ length: 2 }, (_, index) => ({
+    id: dictionaryId * 10 + index,
+    textMainId: 9000 + dictionaryId * 10 + index,
+    fid: `62079966${index + 5}`,
+    textId: `21864917${index + 1}`,
+    action: "skipped",
+    reason:
+      index === 0
+        ? "原文匹配 1 次，译文匹配 2 次，次数不一致"
+        : "原文匹配 2 次，译文匹配 1 次，次数不一致",
+    sourceMatchCount: index === 0 ? 1 : 2,
+    translatedMatchCount: index === 0 ? 2 : 1,
+    crtTime: toIso(new Date(Date.now() - index * 60000)),
+  }));
+
+  return {
+    entryId: dictionaryId,
+    termKey: `term_${Math.max(0, dictionaryId - 3000)}`,
+    correctionVersion,
+    onlyAbnormal: true,
+    items,
+    total: items.length,
+    page: 1,
+    pageSize: 200,
+  };
+}
+
 export function generateChanges(textId?: number) {
   const baseId = textId ? textId : 1001;
   return Array.from({ length: 5 }, (_, i) => ({

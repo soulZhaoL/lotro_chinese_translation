@@ -357,6 +357,9 @@ export default function Dictionary() {
       const result = await apiFetch<DictionaryCorrectionRecordResponse>(
         `/dictionary/${record.id}/correction-records?onlyAbnormal=true&page=1&pageSize=200`
       );
+      if (!result) {
+        throw new Error("纠错异常记录接口返回为空");
+      }
       setAbnormalRecordVersion(result.correctionVersion);
       setAbnormalRecords(result.items);
     } catch (error) {
@@ -498,7 +501,7 @@ export default function Dictionary() {
       {
         title: "操作",
         key: "actions",
-        width: 130,
+        width: 170,
         hideInSearch: true,
         fixed: "right",
         render: (_, record) => (
@@ -516,9 +519,17 @@ export default function Dictionary() {
             >
               纠错
             </Button>
-            <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => void handleViewAbnormalRecords(record)}>
-              异常
-            </Button>
+            {record.correctionLastError ? (
+              <Button
+                type="link"
+                danger
+                size="small"
+                style={{ paddingInline: 0, fontWeight: 600 }}
+                onClick={() => void handleViewAbnormalRecords(record)}
+              >
+                异常
+              </Button>
+            ) : null}
           </Space>
         ),
       },
