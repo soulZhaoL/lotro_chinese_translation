@@ -55,7 +55,29 @@ def _parse_mysql_dsn(dsn: str) -> Dict[str, Any]:
 def _tinyint_to_bool(value: Any) -> Any:
     if value is None:
         return None
-    return value == b"1"
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, (bytes, bytearray)):
+        decoded = value.decode("utf-8").strip()
+        if decoded == "":
+            raise DatabaseConfigError("TINYINT 布尔值不能为空字符串")
+        if decoded == "0":
+            return False
+        if decoded == "1":
+            return True
+        raise DatabaseConfigError(f"TINYINT 布尔值非法: {decoded}")
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
+            raise DatabaseConfigError("TINYINT 布尔值不能为空字符串")
+        if stripped == "0":
+            return False
+        if stripped == "1":
+            return True
+        raise DatabaseConfigError(f"TINYINT 布尔值非法: {stripped}")
+    raise DatabaseConfigError(f"TINYINT 布尔值类型非法: {type(value).__name__}")
 
 
 def _build_mysql_converters():
