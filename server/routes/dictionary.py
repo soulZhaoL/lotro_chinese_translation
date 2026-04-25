@@ -551,6 +551,61 @@ def correct_dictionary_entry(entryId: int, user: Dict[str, Any] = Depends(requir
     )
 
 
+@router.post("/correct-all")
+def correct_all_dictionary_entries(user: Dict[str, Any] = Depends(require_auth)):
+    logger.info("Dict correction all requested: userId={}", user["userId"])
+    with db_cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) AS totalCount FROM dictionary_entries")
+        total_count = int(cursor.fetchone()["totalCount"])
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS runningCount
+            FROM dictionary_entries
+            WHERE "correctionStatus" = %s
+            """,
+            (dictionary_correction.CORRECTION_STATUS_RUNNING,),
+        )
+        running_count = int(cursor.fetchone()["runningCount"])
+
+        cursor.execute(
+            """
+            UPDATE dictionary_entries
+            SET
+              "correctionVersion" = "correctionVersion" + 1,
+              "correctionStatus" = %s,
+              "correctionLastStartedAt" = NULL,
+              "correctionLastFinishedAt" = NULL,
+              "correctionLastError" = NULL,
+              "correctionUpdatedTextCount" = 0,
+              "lastModifiedBy" = %s,
+              "uptTime" = NOW()
+            WHERE "correctionStatus" <> %s
+            """,
+            (
+                dictionary_correction.CORRECTION_STATUS_PENDING,
+                user["userId"],
+                dictionary_correction.CORRECTION_STATUS_RUNNING,
+            ),
+        )
+        requeued_count = int(cursor.rowcount)
+
+    logger.info(
+        "Dict correction all queued: totalCount={} requeuedCount={} skippedRunningCount={} userId={}",
+        total_count,
+        requeued_count,
+        running_count,
+        user["userId"],
+    )
+    return success_response(
+        {
+            "totalCount": total_count,
+            "requeuedCount": requeued_count,
+            "skippedRunningCount": running_count,
+        }
+    )
+
+
 @router.get("/template")
 def download_dictionary_template(user: Dict[str, Any] = Depends(require_auth)):
     """下载词典导入模板。"""

@@ -119,6 +119,7 @@ export default function Dictionary() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingFiltered, setDownloadingFiltered] = useState(false);
+  const [bulkCorrecting, setBulkCorrecting] = useState(false);
   const [correctingId, setCorrectingId] = useState<number | null>(null);
   const [filteredDownloadStageText, setFilteredDownloadStageText] = useState("导出");
 
@@ -281,28 +282,65 @@ export default function Dictionary() {
   }, []);
 
   const handleCorrect = useCallback(
-    async (record: DictionaryItem) => {
+    (record: DictionaryItem) => {
       if (correctingId === record.id || record.correctionStatus === 2) {
         return;
       }
-      try {
-        setCorrectingId(record.id);
-        const result = await apiFetch<{ matchedTextCount: number; updatedTextCount: number }>(
-          `/dictionary/${record.id}/correct`,
-          {
-            method: "POST",
+      Modal.confirm({
+        title: "确认执行纠错？",
+        onOk: async () => {
+          try {
+            setCorrectingId(record.id);
+            const result = await apiFetch<{ matchedTextCount: number; updatedTextCount: number }>(
+              `/dictionary/${record.id}/correct`,
+              {
+                method: "POST",
+              }
+            );
+            message.success(`纠错完成，命中 ${result.matchedTextCount} 条，更新 ${result.updatedTextCount} 条`);
+            actionRef.current?.reload();
+          } catch (error) {
+            message.error(getErrorMessage(error, "系统纠错失败"));
+          } finally {
+            setCorrectingId(null);
           }
-        );
-        message.success(`纠错完成，命中 ${result.matchedTextCount} 条，更新 ${result.updatedTextCount} 条`);
-        actionRef.current?.reload();
-      } catch (error) {
-        message.error(getErrorMessage(error, "系统纠错失败"));
-      } finally {
-        setCorrectingId(null);
-      }
+        },
+      });
     },
     [correctingId]
   );
+
+  const handleCorrectAll = useCallback(() => {
+    if (bulkCorrecting) {
+      return;
+    }
+    Modal.confirm({
+      title: "确认全量纠错",
+      content: "该操作会把全部非运行中的词典条目重新标记为待纠错，随后由定时任务分批执行。可能持续占用数据库资源，是否继续？",
+      okText: "开始入队",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          setBulkCorrecting(true);
+          const result = await apiFetch<{
+            totalCount: number;
+            requeuedCount: number;
+            skippedRunningCount: number;
+          }>("/dictionary/correct-all", {
+            method: "POST",
+          });
+          message.success(
+            `全量纠错已入队，共 ${result.totalCount} 条，重新入队 ${result.requeuedCount} 条，跳过运行中 ${result.skippedRunningCount} 条`
+          );
+          actionRef.current?.reload();
+        } catch (error) {
+          message.error(getErrorMessage(error, "全量纠错入队失败"));
+        } finally {
+          setBulkCorrecting(false);
+        }
+      },
+    });
+  }, [bulkCorrecting]);
 
   const columns = useMemo<ProColumns<DictionaryItem>[]>(
     () => [
@@ -432,10 +470,12 @@ export default function Dictionary() {
               downloadingFiltered={downloadingFiltered}
               filteredDownloadText={filteredDownloadStageText}
               uploading={uploading}
+              bulkCorrecting={bulkCorrecting}
               creating={submitting && !editingItem}
               onDownloadFiltered={() => void handleDownloadFiltered()}
               onDownloadTemplate={() => void handleDownloadTemplate()}
               onUpload={() => fileInputRef.current?.click()}
+              onCorrectAll={handleCorrectAll}
               onCreate={openCreateModal}
             />,
           ],

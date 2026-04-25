@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 
 from server.app import app
+from server.db import db_cursor
+from server.services import dictionary_correction
 
 
 def _login(client: TestClient, seed_user):
@@ -182,3 +184,81 @@ def test_dictionary_upload_rejects_invalid_variant_json(seed_user):
     )
     assert upload_response.status_code == 400
     assert upload_response.json()["detail"].startswith("第 2 行字段 译文变体JSON 不是合法 JSON")
+
+
+def test_dictionary_correct_all_requeues_non_running_entries(seed_user):
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_orc = client.post(
+        "/dictionary",
+        json={"termKey": "orc", "termValue": "兽人", "variantValues": ["奥克"], "category": "race"},
+        headers=headers,
+    )
+    assert create_orc.status_code == 200
+    orc_id = create_orc.json()["data"]["id"]
+
+    create_elf = client.post(
+        "/dictionary",
+        json={"termKey": "elf", "termValue": "精灵", "category": "race"},
+        headers=headers,
+    )
+    assert create_elf.status_code == 200
+    elf_id = create_elf.json()["data"]["id"]
+
+    create_man = client.post(
+        "/dictionary",
+        json={"termKey": "man", "termValue": "人类", "variantValues": ["迈安"], "category": "race"},
+        headers=headers,
+    )
+    assert create_man.status_code == 200
+    man_id = create_man.json()["data"]["id"]
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE dictionary_entries
+            SET "correctionStatus" = %s
+            WHERE id = %s
+            """,
+            (dictionary_correction.CORRECTION_STATUS_RUNNING, man_id),
+        )
+
+    response = client.post("/dictionary/correct-all", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["totalCount"] == 3
+    assert payload["requeuedCount"] == 2
+    assert payload["skippedRunningCount"] == 1
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+              id,
+              "termKey" AS "termKey",
+              "correctionVersion" AS "correctionVersion",
+              "appliedCorrectionVersion" AS "appliedCorrectionVersion",
+              "correctionStatus" AS "correctionStatus"
+            FROM dictionary_entries
+            ORDER BY id ASC
+            """
+        )
+        rows = cursor.fetchall()
+
+    row_map = {row["termKey"]: row for row in rows}
+    assert row_map["orc"]["id"] == orc_id
+    assert row_map["orc"]["correctionVersion"] == 2
+    assert row_map["orc"]["appliedCorrectionVersion"] == 0
+    assert row_map["orc"]["correctionStatus"] == dictionary_correction.CORRECTION_STATUS_PENDING
+
+    assert row_map["elf"]["id"] == elf_id
+    assert row_map["elf"]["correctionVersion"] == 1
+    assert row_map["elf"]["appliedCorrectionVersion"] == 0
+    assert row_map["elf"]["correctionStatus"] == dictionary_correction.CORRECTION_STATUS_PENDING
+
+    assert row_map["man"]["id"] == man_id
+    assert row_map["man"]["correctionVersion"] == 1
+    assert row_map["man"]["appliedCorrectionVersion"] == 0
+    assert row_map["man"]["correctionStatus"] == dictionary_correction.CORRECTION_STATUS_RUNNING

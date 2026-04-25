@@ -239,10 +239,12 @@ type SearchActionBarProps = {
   downloadingFiltered: boolean;
   filteredDownloadText: string;
   uploading: boolean;
+  bulkCorrecting: boolean;
   creating: boolean;
   onDownloadFiltered: () => void;
   onDownloadTemplate: () => void;
   onUpload: () => void;
+  onCorrectAll: () => void;
   onCreate: () => void;
 };
 
@@ -251,10 +253,12 @@ export function SearchActionBar({
   downloadingFiltered,
   filteredDownloadText,
   uploading,
+  bulkCorrecting,
   creating,
   onDownloadFiltered,
   onDownloadTemplate,
   onUpload,
+  onCorrectAll,
   onCreate,
 }: SearchActionBarProps) {
   return (
@@ -277,6 +281,9 @@ export function SearchActionBar({
         <Button onClick={onDownloadTemplate}>下载模板</Button>
         <Button loading={uploading} onClick={onUpload}>
           导入
+        </Button>
+        <Button loading={bulkCorrecting} onClick={onCorrectAll}>
+          全量纠错
         </Button>
         <Button type="primary" loading={creating} onClick={onCreate}>
           新增
