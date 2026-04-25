@@ -335,6 +335,7 @@ export default function Dictionary() {
         title: "分类",
         dataIndex: "category",
         valueType: "select",
+        width: 130,
         valueEnum: Object.fromEntries(
           CATEGORY_OPTIONS.map((option) => [option.value, { text: option.label }])
         ),
@@ -343,19 +344,21 @@ export default function Dictionary() {
       {
         title: "纠错状态",
         dataIndex: "correctionStatus",
+        width: 150,
         hideInSearch: true,
         render: (_, record) => renderCorrectionStatus(record.correctionStatus, record.correctionStatusLabel),
       },
       {
         title: "最近纠错时间",
         dataIndex: "correctionLastFinishedAt",
-        width: 130,
+        width: 160,
         hideInSearch: true,
         render: (_, record) => formatDateTime(record.correctionLastFinishedAt),
       },
       {
         title: "上次更新文本数",
         dataIndex: "correctionUpdatedTextCount",
+        width: 120,
         hideInSearch: true,
         render: (_, record) => String(record.correctionUpdatedTextCount || 0),
       },
@@ -369,14 +372,14 @@ export default function Dictionary() {
       {
         title: "修改人",
         dataIndex: "lastModifiedByName",
-        
+        width: 100,
         hideInSearch: true,
         render: (_, record) => record.lastModifiedByName || "-",
       },
       {
         title: "更新时间",
         dataIndex: "uptTime",
-        width: 130,
+        width: 160,
         hideInSearch: true,
         render: (_, record) => formatDateTime(record.uptTime),
       },
