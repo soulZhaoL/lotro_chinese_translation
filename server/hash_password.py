@@ -64,3 +64,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+    # ./server/hash_password.py --username aaa --password bbb
