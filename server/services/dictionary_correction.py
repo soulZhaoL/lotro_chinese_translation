@@ -1,6 +1,7 @@
 # 词典系统纠错服务。
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -31,13 +32,24 @@ class CorrectionResult:
 
 
 def normalize_variant_values(values: Any) -> List[str]:
-    if not isinstance(values, list):
+    parsed_values = values
+    if values is None:
         return []
+    if isinstance(values, (bytes, bytearray)):
+        parsed_values = values.decode("utf-8")
+    if isinstance(parsed_values, str):
+        try:
+            parsed_values = json.loads(parsed_values)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f'dictionary variantValues JSON 解析失败: {error.msg}') from error
+    if not isinstance(parsed_values, list):
+        raise RuntimeError("dictionary variantValues 必须为数组")
+
     result: List[str] = []
     seen = set()
-    for item in values:
+    for index, item in enumerate(parsed_values, start=1):
         if not isinstance(item, str):
-            continue
+            raise RuntimeError(f"dictionary variantValues 第 {index} 项必须为字符串")
         cleaned = item.strip()
         if not cleaned or cleaned in seen:
             continue
