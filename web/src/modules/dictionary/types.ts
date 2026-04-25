@@ -27,6 +27,29 @@ export interface DictionaryResponse {
   pageSize: number;
 }
 
+export interface DictionaryCorrectionRecordItem {
+  id: number;
+  textMainId: number;
+  fid: string;
+  textId: string;
+  action: string;
+  reason: string;
+  sourceMatchCount: number;
+  translatedMatchCount: number;
+  crtTime: string;
+}
+
+export interface DictionaryCorrectionRecordResponse {
+  entryId: number;
+  termKey: string;
+  correctionVersion: number;
+  onlyAbnormal: boolean;
+  items: DictionaryCorrectionRecordItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export type DictionaryFilters = {
   termKey?: string;
   termValue?: string;

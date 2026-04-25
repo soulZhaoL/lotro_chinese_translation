@@ -606,6 +606,103 @@ def correct_all_dictionary_entries(user: Dict[str, Any] = Depends(require_auth))
     )
 
 
+@router.get("/{entryId}/correction-records")
+def list_dictionary_correction_records(
+    entryId: int,
+    correctionVersion: Optional[int] = Query(default=None, alias="correctionVersion"),
+    onlyAbnormal: bool = Query(default=True, alias="onlyAbnormal"),
+    page: int = 1,
+    pageSize: Optional[int] = Query(default=None, alias="pageSize"),
+    user: Dict[str, Any] = Depends(require_auth),
+):
+    logger.info(
+        "Dict correction records list: entryId={} correctionVersion={} onlyAbnormal={} page={} pageSize={} userId={}",
+        entryId,
+        correctionVersion,
+        onlyAbnormal,
+        page,
+        pageSize,
+        user["userId"],
+    )
+    config = get_config()
+    pagination = config["pagination"]
+    default_page_size = pagination["default_page_size"]
+    max_page_size = pagination["max_page_size"]
+
+    effective_page_size = pageSize if pageSize is not None else default_page_size
+    if effective_page_size > max_page_size:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pageSize 超出最大限制")
+    offset = _apply_pagination(page, effective_page_size)
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+              id,
+              "termKey" AS "termKey",
+              "correctionVersion" AS "correctionVersion"
+            FROM dictionary_entries
+            WHERE id = %s
+            """,
+            (entryId,),
+        )
+        entry = cursor.fetchone()
+        if entry is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="词条不存在")
+
+        resolved_version = correctionVersion if correctionVersion is not None else int(entry["correctionVersion"])
+        conditions = ['l."dictionaryEntryId" = %s', 'l."correctionVersion" = %s']
+        params: List[Any] = [entryId, resolved_version]
+        if onlyAbnormal:
+            conditions.append('l.action = %s')
+            params.append("skipped")
+        where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM dictionary_correction_logs l
+            {where_clause}
+            """,
+            tuple(params),
+        )
+        total = int(cursor.fetchone()["total"])
+
+        cursor.execute(
+            f"""
+            SELECT
+              l.id,
+              l."textMainId" AS "textMainId",
+              l.fid,
+              l."textId" AS "textId",
+              l.action,
+              l.reason,
+              l."sourceMatchCount" AS "sourceMatchCount",
+              l."translatedMatchCount" AS "translatedMatchCount",
+              l."crtTime" AS "crtTime"
+            FROM dictionary_correction_logs l
+            {where_clause}
+            ORDER BY l."crtTime" DESC, l.id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(params + [effective_page_size, offset]),
+        )
+        items = cursor.fetchall()
+
+    return success_response(
+        {
+            "entryId": entryId,
+            "termKey": entry["termKey"],
+            "correctionVersion": resolved_version,
+            "onlyAbnormal": onlyAbnormal,
+            "items": items,
+            "total": total,
+            "page": page,
+            "pageSize": effective_page_size,
+        }
+    )
+
+
 @router.get("/template")
 def download_dictionary_template(user: Dict[str, Any] = Depends(require_auth)):
     """下载词典导入模板。"""

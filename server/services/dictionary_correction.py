@@ -31,6 +31,13 @@ class CorrectionResult:
     error: Optional[str]
 
 
+@dataclass
+class TextCorrectionAnalysis:
+    source_match_count: int
+    translated_match_count: int
+    after_text: str
+
+
 def normalize_variant_values(values: Any) -> List[str]:
     parsed_values = values
     if values is None:
@@ -143,13 +150,102 @@ def release_correction_lock(lock_name: str, connection) -> None:
         connection.close()
 
 
-def _replace_variants(text: Optional[str], variants: List[str], term_value: str) -> Optional[str]:
-    if text is None or text == "":
-        return text
-    updated = text
-    for variant in sorted(variants, key=len, reverse=True):
-        updated = updated.replace(variant, term_value)
-    return updated
+def _count_non_overlapping_occurrences(text: str, needle: str) -> int:
+    if not text or not needle:
+        return 0
+    count = 0
+    start = 0
+    while True:
+        match_index = text.find(needle, start)
+        if match_index < 0:
+            return count
+        count += 1
+        start = match_index + len(needle)
+
+
+def _analyze_and_replace_variants(text: Optional[str], variants: List[str], term_value: str) -> TextCorrectionAnalysis:
+    source_text = text or ""
+    if not source_text:
+        return TextCorrectionAnalysis(source_match_count=0, translated_match_count=0, after_text="")
+
+    sorted_variants = sorted(variants, key=len, reverse=True)
+    translated_match_count = 0
+    result_parts: List[str] = []
+    cursor = 0
+    text_length = len(source_text)
+
+    while cursor < text_length:
+        matched_variant = None
+        for variant in sorted_variants:
+            if source_text.startswith(variant, cursor):
+                matched_variant = variant
+                break
+        if matched_variant is None:
+            result_parts.append(source_text[cursor])
+            cursor += 1
+            continue
+        translated_match_count += 1
+        result_parts.append(term_value)
+        cursor += len(matched_variant)
+
+    return TextCorrectionAnalysis(
+        source_match_count=0,
+        translated_match_count=translated_match_count,
+        after_text="".join(result_parts),
+    )
+
+
+def _build_text_correction_analysis(source_text: Optional[str], translated_text: Optional[str], term_key: str, variants: List[str], term_value: str) -> TextCorrectionAnalysis:
+    source_match_count = _count_non_overlapping_occurrences(source_text or "", term_key)
+    translated_analysis = _analyze_and_replace_variants(translated_text, variants, term_value)
+    return TextCorrectionAnalysis(
+        source_match_count=source_match_count,
+        translated_match_count=translated_analysis.translated_match_count,
+        after_text=translated_analysis.after_text,
+    )
+
+
+def _insert_correction_log(
+    cursor,
+    *,
+    dictionary_entry_id: int,
+    correction_version: int,
+    text_main_id: int,
+    fid: str,
+    text_id: str,
+    action: str,
+    reason: str,
+    source_match_count: int,
+    translated_match_count: int,
+) -> None:
+    cursor.execute(
+        """
+        INSERT INTO dictionary_correction_logs (
+          "dictionaryEntryId",
+          "correctionVersion",
+          "textMainId",
+          fid,
+          "textId",
+          action,
+          reason,
+          "sourceMatchCount",
+          "translatedMatchCount",
+          "crtTime"
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """,
+        (
+            dictionary_entry_id,
+            correction_version,
+            text_main_id,
+            fid,
+            text_id,
+            action,
+            reason,
+            source_match_count,
+            translated_match_count,
+        ),
+    )
 
 
 def run_dictionary_correction(entry_id: int) -> CorrectionResult:
@@ -157,6 +253,7 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
     started_at = datetime.now().isoformat()
     matched_text_count = 0
     updated_text_count = 0
+    skipped_text_count = 0
 
     with db_cursor() as cursor:
         cursor.execute(
@@ -180,6 +277,7 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
             raise RuntimeError("词典条目不存在")
 
         variant_values = normalize_variant_values(entry["variantValues"])
+        correction_version = int(entry["correctionVersion"])
         if not entry["isActive"] or not variant_values:
             cursor.execute(
                 """
@@ -200,7 +298,7 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
                 matched_text_count=0,
                 updated_text_count=0,
                 status=CORRECTION_STATUS_IDLE,
-                applied_version=entry["correctionVersion"],
+                applied_version=correction_version,
                 started_at=started_at,
                 finished_at=datetime.now().isoformat(),
                 error=None,
@@ -227,13 +325,26 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
             """,
             (CORRECTION_STATUS_RUNNING, entry_id),
         )
+        cursor.execute(
+            """
+            DELETE FROM dictionary_correction_logs
+            WHERE "dictionaryEntryId" = %s AND "correctionVersion" = %s
+            """,
+            (entry_id, correction_version),
+        )
 
         source_pattern = f"%{entry['termKey']}%"
         translated_conditions = " OR ".join(['"translatedText" LIKE %s' for _ in variant_values])
         translated_params = [f"%{variant}%" for variant in variant_values]
         cursor.execute(
             f"""
-            SELECT id, "translatedText" AS "translatedText", status
+            SELECT
+              id,
+              fid,
+              "textId" AS "textId",
+              "sourceText" AS "sourceText",
+              "translatedText" AS "translatedText",
+              status
             FROM text_main
             WHERE "sourceText" LIKE %s
               AND ({translated_conditions})
@@ -242,12 +353,62 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
             tuple([source_pattern, *translated_params]),
         )
         rows = cursor.fetchall()
-        matched_text_count = len(rows)
 
         for row in rows:
+            analysis = _build_text_correction_analysis(
+                row.get("sourceText"),
+                row.get("translatedText"),
+                entry["termKey"],
+                variant_values,
+                entry["termValue"],
+            )
             before_text = row["translatedText"] or ""
-            after_text = _replace_variants(row["translatedText"], variant_values, entry["termValue"]) or ""
+            if analysis.source_match_count <= 0 or analysis.translated_match_count <= 0:
+                skipped_text_count += 1
+                _insert_correction_log(
+                    cursor,
+                    dictionary_entry_id=entry_id,
+                    correction_version=correction_version,
+                    text_main_id=int(row["id"]),
+                    fid=str(row["fid"]),
+                    text_id=str(row["textId"]),
+                    action="skipped",
+                    reason="原文或译文匹配次数为 0",
+                    source_match_count=analysis.source_match_count,
+                    translated_match_count=analysis.translated_match_count,
+                )
+                continue
+            if analysis.source_match_count != analysis.translated_match_count:
+                skipped_text_count += 1
+                _insert_correction_log(
+                    cursor,
+                    dictionary_entry_id=entry_id,
+                    correction_version=correction_version,
+                    text_main_id=int(row["id"]),
+                    fid=str(row["fid"]),
+                    text_id=str(row["textId"]),
+                    action="skipped",
+                    reason=f"原文匹配 {analysis.source_match_count} 次，译文匹配 {analysis.translated_match_count} 次，次数不一致",
+                    source_match_count=analysis.source_match_count,
+                    translated_match_count=analysis.translated_match_count,
+                )
+                continue
+            matched_text_count += 1
+            after_text = analysis.after_text
             if after_text == before_text:
+                skipped_text_count += 1
+                _insert_correction_log(
+                    cursor,
+                    dictionary_entry_id=entry_id,
+                    correction_version=correction_version,
+                    text_main_id=int(row["id"]),
+                    fid=str(row["fid"]),
+                    text_id=str(row["textId"]),
+                    action="skipped",
+                    reason="替换后文本未变化",
+                    source_match_count=analysis.source_match_count,
+                    translated_match_count=analysis.translated_match_count,
+                )
                 continue
             cursor.execute(
                 """
@@ -270,7 +431,25 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
                     f"SYSTEM纠错[词典#{entry_id}][{entry['termKey']}]: {' | '.join(variant_values)} -> {entry['termValue']}",
                 ),
             )
+            _insert_correction_log(
+                cursor,
+                dictionary_entry_id=entry_id,
+                correction_version=correction_version,
+                text_main_id=int(row["id"]),
+                fid=str(row["fid"]),
+                text_id=str(row["textId"]),
+                action="updated",
+                reason="原文与译文匹配次数一致，已执行纠错",
+                source_match_count=analysis.source_match_count,
+                translated_match_count=analysis.translated_match_count,
+            )
             updated_text_count += 1
+
+        correction_last_error = None
+        if skipped_text_count > 0:
+            correction_last_error = (
+                f"存在 {skipped_text_count} 条异常记录，请查看纠错异常记录"
+            )
 
         cursor.execute(
             """
@@ -279,21 +458,21 @@ def run_dictionary_correction(entry_id: int) -> CorrectionResult:
               "correctionStatus" = %s,
               "appliedCorrectionVersion" = "correctionVersion",
               "correctionLastFinishedAt" = NOW(),
-              "correctionLastError" = NULL,
+              "correctionLastError" = %s,
               "correctionUpdatedTextCount" = %s
             WHERE id = %s
             """,
-            (CORRECTION_STATUS_DONE, updated_text_count, entry_id),
+            (CORRECTION_STATUS_DONE, correction_last_error, updated_text_count, entry_id),
         )
-
-        applied_version = int(entry["correctionVersion"])
+        applied_version = correction_version
 
     finished_at = datetime.now().isoformat()
     logger.info(
-        "dictionary correction complete: entryId={} matchedTextCount={} updatedTextCount={}",
+        "dictionary correction complete: entryId={} matchedTextCount={} updatedTextCount={} skippedTextCount={}",
         entry_id,
         matched_text_count,
         updated_text_count,
+        skipped_text_count,
     )
     return CorrectionResult(
         dictionary_id=entry_id,

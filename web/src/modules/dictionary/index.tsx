@@ -1,7 +1,7 @@
 import type { ActionType, ProColumns } from "@ant-design/pro-components";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProFormInstance } from "@ant-design/pro-form";
-import { Button, Form, Input, Modal, Popover, Select, Space, Typography, message } from "antd";
+import { Button, Form, Input, Modal, Popover, Select, Space, Table, Typography, message } from "antd";
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -20,6 +20,8 @@ import {
   resolveSearchParams,
 } from "./io";
 import type {
+  DictionaryCorrectionRecordItem,
+  DictionaryCorrectionRecordResponse,
   DictionaryFilters,
   DictionaryItem,
   DictionaryMutationPayload,
@@ -121,6 +123,11 @@ export default function Dictionary() {
   const [downloadingFiltered, setDownloadingFiltered] = useState(false);
   const [bulkCorrecting, setBulkCorrecting] = useState(false);
   const [correctingId, setCorrectingId] = useState<number | null>(null);
+  const [abnormalModalOpen, setAbnormalModalOpen] = useState(false);
+  const [abnormalLoading, setAbnormalLoading] = useState(false);
+  const [abnormalRecordEntry, setAbnormalRecordEntry] = useState<DictionaryItem | null>(null);
+  const [abnormalRecordVersion, setAbnormalRecordVersion] = useState<number | null>(null);
+  const [abnormalRecords, setAbnormalRecords] = useState<DictionaryCorrectionRecordItem[]>([]);
   const [filteredDownloadStageText, setFilteredDownloadStageText] = useState("导出");
 
   const syncModalForm = useCallback(() => {
@@ -342,6 +349,73 @@ export default function Dictionary() {
     });
   }, [bulkCorrecting]);
 
+  const handleViewAbnormalRecords = useCallback(async (record: DictionaryItem) => {
+    try {
+      setAbnormalModalOpen(true);
+      setAbnormalLoading(true);
+      setAbnormalRecordEntry(record);
+      const result = await apiFetch<DictionaryCorrectionRecordResponse>(
+        `/dictionary/${record.id}/correction-records?onlyAbnormal=true&page=1&pageSize=200`
+      );
+      setAbnormalRecordVersion(result.correctionVersion);
+      setAbnormalRecords(result.items);
+    } catch (error) {
+      setAbnormalModalOpen(false);
+      setAbnormalRecordEntry(null);
+      setAbnormalRecordVersion(null);
+      setAbnormalRecords([]);
+      message.error(getErrorMessage(error, "加载纠错异常记录失败"));
+    } finally {
+      setAbnormalLoading(false);
+    }
+  }, []);
+
+  const closeAbnormalModal = useCallback(() => {
+    setAbnormalModalOpen(false);
+    setAbnormalLoading(false);
+    setAbnormalRecordEntry(null);
+    setAbnormalRecordVersion(null);
+    setAbnormalRecords([]);
+  }, []);
+
+  const abnormalColumns = useMemo(
+    () => [
+      {
+        title: "FID",
+        dataIndex: "fid",
+        width: 140,
+      },
+      {
+        title: "TextId",
+        dataIndex: "textId",
+        width: 180,
+      },
+      {
+        title: "原文次数",
+        dataIndex: "sourceMatchCount",
+        width: 100,
+      },
+      {
+        title: "译文次数",
+        dataIndex: "translatedMatchCount",
+        width: 100,
+      },
+      {
+        title: "原因",
+        dataIndex: "reason",
+        width: 320,
+        render: (value: string) => renderLongText(value),
+      },
+      {
+        title: "记录时间",
+        dataIndex: "crtTime",
+        width: 160,
+        render: (value: string) => formatDateTime(value),
+      },
+    ],
+    []
+  );
+
   const columns = useMemo<ProColumns<DictionaryItem>[]>(
     () => [
       {
@@ -442,11 +516,14 @@ export default function Dictionary() {
             >
               纠错
             </Button>
+            <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => void handleViewAbnormalRecords(record)}>
+              异常
+            </Button>
           </Space>
         ),
       },
     ],
-    [correctingId, handleCorrect, openEditModal]
+    [correctingId, handleCorrect, handleViewAbnormalRecords, openEditModal]
   );
 
   return (
@@ -545,6 +622,30 @@ export default function Dictionary() {
         style={{ display: "none" }}
         onChange={(event) => void handleUploadFile(event)}
       />
+
+      <Modal
+        title={
+          abnormalRecordEntry
+            ? `纠错异常记录 - ${abnormalRecordEntry.termKey}${abnormalRecordVersion !== null ? `（版本 ${abnormalRecordVersion}）` : ""}`
+            : "纠错异常记录"
+        }
+        open={abnormalModalOpen}
+        onCancel={closeAbnormalModal}
+        footer={null}
+        width={980}
+        destroyOnClose
+      >
+        <Table<DictionaryCorrectionRecordItem>
+          rowKey="id"
+          loading={abnormalLoading}
+          columns={abnormalColumns}
+          dataSource={abnormalRecords}
+          pagination={false}
+          locale={{ emptyText: abnormalLoading ? "加载中..." : "当前版本没有异常记录" }}
+          scroll={{ x: 920 }}
+          size="small"
+        />
+      </Modal>
 
       <Modal
         title={editingItem ? "修改词条" : "新增词条"}

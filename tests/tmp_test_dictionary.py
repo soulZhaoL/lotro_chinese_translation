@@ -262,3 +262,61 @@ def test_dictionary_correct_all_requeues_non_running_entries(seed_user):
     assert row_map["man"]["correctionVersion"] == 1
     assert row_map["man"]["appliedCorrectionVersion"] == 0
     assert row_map["man"]["correctionStatus"] == dictionary_correction.CORRECTION_STATUS_RUNNING
+
+
+def test_dictionary_correction_records_lists_abnormal_items(seed_user):
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create = client.post(
+        "/dictionary",
+        json={"termKey": "Bree", "termValue": "布雷", "variantValues": ["布里"], "category": "place"},
+        headers=headers,
+    )
+    assert create.status_code == 200
+    entry_id = create.json()["data"]["id"]
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO dictionary_correction_logs (
+              "dictionaryEntryId",
+              "correctionVersion",
+              "textMainId",
+              fid,
+              "textId",
+              action,
+              reason,
+              "sourceMatchCount",
+              "translatedMatchCount"
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                entry_id,
+                1,
+                1001,
+                "620799665",
+                "218649171",
+                "skipped",
+                "原文匹配 1 次，译文匹配 2 次，次数不一致",
+                1,
+                2,
+            ),
+        )
+
+    response = client.get(
+        f"/dictionary/{entry_id}/correction-records?onlyAbnormal=true&page=1&pageSize=20",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["entryId"] == entry_id
+    assert payload["termKey"] == "Bree"
+    assert payload["correctionVersion"] == 1
+    assert payload["total"] == 1
+    assert payload["items"][0]["fid"] == "620799665"
+    assert payload["items"][0]["textId"] == "218649171"
+    assert payload["items"][0]["sourceMatchCount"] == 1
+    assert payload["items"][0]["translatedMatchCount"] == 2

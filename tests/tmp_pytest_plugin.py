@@ -49,6 +49,7 @@ def ensure_tables(config: Dict[str, object], request):
         "text_locks",
         "text_changes",
         "dictionary_entries",
+        "dictionary_correction_logs",
     ]
     with db_cursor() as cursor:
         for table in required_tables:
