@@ -70,6 +70,6 @@ text_import_export:
 
 dictionary_correction:
   enabled: true
-  scan_interval_seconds: 300
-  batch_size: 20
+  scan_interval_seconds: 120
+  batch_size: 10
   lock_name: "lotro_dictionary_correction"
