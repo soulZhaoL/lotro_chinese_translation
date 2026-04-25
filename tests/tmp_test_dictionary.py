@@ -19,7 +19,7 @@ def _build_dictionary_xlsx(rows):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "dictionary"
-    sheet.append(["原文 key", "译文 value", "分类", "备注"])
+    sheet.append(["原文 key", "标准译文", "译文变体JSON", "分类", "备注"])
     for row in rows:
         sheet.append(row)
 
@@ -92,12 +92,12 @@ def test_dictionary_template_download_and_upload_upsert(seed_user):
     workbook = load_workbook(BytesIO(template_response.content))
     sheet = workbook.active
     headers_row = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
-    assert headers_row == ["原文 key", "译文 value", "分类", "备注"]
+    assert headers_row == ["原文 key", "标准译文", "译文变体JSON", "分类", "备注"]
 
     upload_bytes = _build_dictionary_xlsx(
         [
-          ["orc", "半兽人", "race", "已覆盖"],
-          ["elf", "精灵", "race", "新增词条"],
+          ["orc", "半兽人", '["兽族"]', "race", "已覆盖"],
+          ["elf", "精灵", '["尖耳朵"]', "race", "新增词条"],
         ]
     )
     upload_response = client.post(
@@ -116,11 +116,13 @@ def test_dictionary_template_download_and_upload_upsert(seed_user):
     orc_response = client.get("/dictionary?termKey=orc", headers=headers)
     orc_item = orc_response.json()["data"]["items"][0]
     assert orc_item["termValue"] == "半兽人"
+    assert orc_item["variantValues"] == ["兽族"]
     assert orc_item["remark"] == "已覆盖"
 
     elf_response = client.get("/dictionary?termKey=elf", headers=headers)
     elf_item = elf_response.json()["data"]["items"][0]
     assert elf_item["termValue"] == "精灵"
+    assert elf_item["variantValues"] == ["尖耳朵"]
     assert elf_item["remark"] == "新增词条"
 
 
@@ -131,8 +133,8 @@ def test_dictionary_upload_rejects_duplicate_term_key(seed_user):
 
     upload_bytes = _build_dictionary_xlsx(
         [
-          ["orc", "兽人", "race", None],
-          ["orc", "半兽人", "race", "重复"],
+          ["orc", "兽人", None, "race", None],
+          ["orc", "半兽人", None, "race", "重复"],
         ]
     )
     upload_response = client.post(
@@ -145,3 +147,25 @@ def test_dictionary_upload_rejects_duplicate_term_key(seed_user):
     )
     assert upload_response.status_code == 400
     assert upload_response.json()["detail"] == "上传文件存在重复原文 key"
+
+
+def test_dictionary_upload_rejects_invalid_variant_json(seed_user):
+    client = TestClient(app)
+    token = _login(client, seed_user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    upload_bytes = _build_dictionary_xlsx(
+        [
+          ["skill_t", "skill_t", '["skill1"", "skill2"]', "skill", "非法 JSON"],
+        ]
+    )
+    upload_response = client.post(
+        "/dictionary/upload?fileName=dictionary.xlsx",
+        content=upload_bytes,
+        headers={
+            **headers,
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )
+    assert upload_response.status_code == 400
+    assert upload_response.json()["detail"].startswith("第 2 行字段 译文变体JSON 不是合法 JSON")
