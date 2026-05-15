@@ -196,7 +196,7 @@ export default function TextsList() {
         body: selectedFile,
       });
 
-      message.success(`上传成功，更新 ${result.updatedCount || 0} 条`);
+      message.success(`上传成功，更新 ${result.updatedCount || 0} 条.`);
       actionRef.current?.reload();
     } catch (error) {
       message.error(getErrorMessage(error, "上传失败"));
